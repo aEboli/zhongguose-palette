@@ -1,0 +1,5 @@
+interface:
+  display_name: "中国色配色"
+  short_description: "用 526 中国传统色生成配色"
+  default_prompt: "用 $zhongguose-palette 从 zhongguose.com 的 526 个中国传统色里选配色，按主场 / 结构 / 点缀三个角色分配。用户提到配色、中国色、传统色、国风，或点名故宫、青花、水墨、敦煌、宋瓷、江南、漆器、年画时使用。先跑 scripts/palette.py，不要凭记忆猜 hex。"
+  brand_color: "#1772b4"
