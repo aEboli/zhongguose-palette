@@ -1,0 +1,63 @@
+{"say": "配个中国风的颜色", "expect": {"media": "ui", "dark": false}, "defaulted": ["media", "mood"], "why": "零信号时缺省要起作用，不是反问"}
+{"say": "茶叶小店的网站，安静一点", "expect": {"media": "ui", "mood": "雅", "dark": false}, "why": "最典型的白话入口"}
+{"say": "博物馆海报要有分量", "expect": {"media": "poster"}, "why": "海报走 poster，不做 WCAG 硬闸"}
+{"say": "做个后台仪表盘，深色模式", "expect": {"media": "ui", "dark": true}, "why": "深色必须走深底做场"}
+{"say": "过年活动页，要喜庆", "expect": {"media": "ui", "scene": "年画", "mood": "艳"}, "why": "过年→年画"}
+{"say": "青花瓷风格的官网", "expect": {"media": "ui", "scene": "青花"}, "why": "点名场景"}
+{"say": "新中式民宿的墙面配色", "expect": {"media": "interior"}, "why": "墙面→interior，墙必须低彩"}
+{"say": "汉服店的电商首页", "expect": {"media": "ui"}, "why": "电商是网页，不是服装设计"}
+{"say": "做一件汉服的配色", "expect": {"media": "fashion"}, "why": "真做衣服才是 fashion"}
+{"say": "科技公司官网，冷一点", "expect": {"media": "ui", "mood": "清冷"}, "why": "冷调"}
+{"say": "婚礼请柬，别太艳", "expect": {"media": "poster", "mood": "雅"}, "forbid_mood": ["艳", "市井"], "why": "否定要能翻盘，不能只减分"}
+{"say": "想要喜庆的红，但整体又要素雅一点，有水墨感", "expect": {"ambiguity": "响/静"}, "why": "响与静同时被强烈要求，是真歧义"}
+{"say": "水墨风格的个人博客", "expect": {"media": "ui", "scene": "水墨"}, "why": "水墨+博客"}
+{"say": "故宫文创的包装", "expect": {"media": "poster", "scene": "故宫"}, "why": "文创包装走印刷"}
+{"say": "敦煌展览的主视觉", "expect": {"media": "poster", "scene": "敦煌"}, "why": "展览主视觉"}
+{"say": "宋代美学的家具品牌", "expect": {"scene": "宋瓷"}, "why": "宋→宋瓷"}
+{"say": "江南水乡的旅游网站", "expect": {"media": "ui", "scene": "江南"}, "why": "水乡→江南"}
+{"say": "漆器质感的首饰盒包装", "expect": {"scene": "漆器"}, "why": "漆器"}
+{"say": "唐三彩那种感觉的插画", "expect": {"media": "poster", "scene": "唐三彩"}, "why": "唐三彩"}
+{"say": "书法教学 App 的界面", "expect": {"media": "ui"}, "why": "书法→水墨语汇，媒材是界面"}
+{"say": "中医养生馆的门店视觉", "expect": {"mood": "雅"}, "why": "养生→雅"}
+{"say": "国风游戏的 UI", "expect": {"media": "ui", "mood": "浓烈"}, "why": "游戏→浓烈"}
+{"say": "金融产品的官网，要稳重", "expect": {"media": "ui"}, "why": "金融不该配成年画"}
+{"say": "儿童绘本的配色", "expect": {"media": "poster"}, "why": "绘本是印刷"}
+{"say": "夜市小吃摊的招牌", "expect": {"mood": "市井"}, "why": "夜市→市井"}
+{"say": "极简的文档站", "expect": {"media": "ui", "mood": "空灵"}, "why": "极简→空灵"}
+{"say": "复古做旧的唱片封面", "expect": {"media": "poster", "mood": "古朴"}, "why": "做旧→古朴"}
+{"say": "茶室的空间配色，要静", "expect": {"media": "interior"}, "why": "茶室是空间"}
+{"say": "用 #c1272d 做品牌色的落地页", "expect": {"media": "ui", "seed": "#c1272d"}, "why": "hex 种子要被识别"}
+{"say": "以朱红为主色的活动页", "expect": {"media": "ui", "seed": "朱红"}, "why": "库内色名要被识别成种子"}
+{"say": "石青配月白的海报", "expect": {"media": "poster"}, "why": "别名要能解析（石青→群青）"}
+{"say": "不要红色，做个国风网站", "expect": {"media": "ui"}, "why": "否定色不该把整轴清空"}
+{"say": "深色模式的仪表盘，但不要纯黑", "expect": {"media": "ui", "dark": true}, "why": "深色 + 不要纯黑"}
+{"say": "淡雅一点的婚纱摄影网站", "expect": {"media": "ui", "mood": "雅"}, "why": "淡雅"}
+{"say": "热闹一点的电商大促页", "expect": {"media": "ui"}, "forbid_mood": ["空灵"], "why": "大促不能配成空灵"}
+{"say": "给这个后台配一套暗色主题", "expect": {"media": "ui", "dark": true}, "why": "暗色主题"}
+{"say": "文创礼盒，素净但要有质感", "expect": {"media": "poster", "mood": "雅"}, "why": "文创+素净"}
+{"say": "武侠风格的游戏落地页", "expect": {"media": "ui"}, "why": "武侠没有专属场景，不该乱映射"}
+{"say": "白墙黛瓦那种感觉的民宿", "expect": {"media": "interior", "scene": "江南"}, "why": "白墙黛瓦是江南的原话"}
+{"say": "大片留白，一点墨，一枚印", "expect": {"scene": "水墨"}, "why": "用物象说法而不是场景名也要能命中"}
+{"say": "蓝和白，像瓷器上那种", "expect": {"scene": "青花"}, "why": "白话描述青花"}
+{"say": "过年门神那种红配绿", "expect": {"scene": "年画"}, "why": "白话描述年画"}
+{"say": "黑漆描金那种", "expect": {"scene": "漆器"}, "why": "白话描述漆器"}
+{"say": "淡青的瓷器那种", "expect": {"scene": "宋瓷"}, "why": "白话描述宋瓷"}
+{"say": "壁画那种土红配石青", "expect": {"scene": "敦煌"}, "why": "白话描述敦煌"}
+{"say": "红墙黄瓦那一线金黄", "expect": {"scene": "故宫"}, "why": "白话描述故宫"}
+{"say": "给个色板", "expect": {"media": "ui"}, "defaulted": ["media", "mood"], "why": "极短输入也要给出方案"}
+{"say": "帮我配色", "expect": {"media": "ui"}, "defaulted": ["media", "mood"], "why": "极短输入"}
+{"say": "这个页面颜色太乱了，帮我重配", "expect": {"media": "ui"}, "why": "重配请求"}
+{"say": "要有高级感，不要土", "expect": {"mood": "雅"}, "forbid_mood": ["市井"], "why": "高级感→雅，不要土→避开市井"}
+{"say": "非遗手工艺品的电商详情页", "expect": {"media": "ui"}, "why": "非遗→古朴语汇"}
+{"say": "香道品牌的视觉", "expect": {"mood": "空灵"}, "why": "香道→空灵"}
+{"say": "中式酒店大堂的墙面和家具", "expect": {"media": "interior"}, "why": "大堂是空间"}
+{"say": "旗袍定制店的小程序", "expect": {"media": "ui"}, "why": "小程序是界面"}
+{"say": "刺绣图案的配色", "expect": {"media": "fashion"}, "why": "刺绣是织物"}
+{"say": "剪纸风格的春节海报", "expect": {"media": "poster", "scene": "年画"}, "why": "剪纸+春节"}
+{"say": "冰裂纹那种细线", "expect": {}, "why": "器物工艺名暂无场景，不该乱映射到不相关的场景"}
+{"say": "温润如玉的感觉", "expect": {}, "why": "玉色目前没有文化校正，不该给出鲜绿"}
+{"say": "紫砂壶的产品页", "expect": {"media": "ui"}, "why": "紫砂暂无场景，媒材仍应识别"}
+{"say": "青铜器展览的海报", "expect": {"media": "poster"}, "why": "青铜暂无场景，媒材仍应识别"}
+{"say": "要五个色", "expect": {}, "why": "不该扩成等权五色板，应给三色加派生令牌"}
+{"say": "给我 CSS 变量", "expect": {}, "why": "交付形式请求，不改配色方向"}
+{"say": "这套能用在图表上吗", "expect": {}, "why": "图表要走 chart 段，不是把三色当填充"}

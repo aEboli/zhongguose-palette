@@ -28,6 +28,25 @@ ALIASES_PATH = ROOT / "references" / "aliases.json"
 CURATED_PATH = ROOT / "references" / "curated.json"
 
 # 评分权重：总和不必为 1，相对大小才重要。调参时只改这里。
+# 深底安全区。库内没有纯黑，最深的一批里混着深牵牛紫这类紫黑；
+# 不设上限地取「最深」会让所有暗色方案塌到同一块紫黑上。
+DARK_GROUND_MAX_L = 22.0
+DARK_GROUND_MAX_C = 20.0
+
+# 语义色（success/warning/error/info）本就跨色族——绿/黄/红/青是它们的文化锁，
+# 不属于场景色族。family lock 扫描必须放行这一组，否则每个场景都会误报。
+SEMANTIC_TOKENS = ("success", "warning", "error", "info")
+NEUTRAL_FAMILIES = ("灰", "白", "黑")
+
+# 留白型：这些氛围与场景以纸地为主体，结构色的面积下限要放宽，
+# 否则「大面留白」「几乎是纸」只是文案，做不出来。
+AIRY_MOODS = ("空灵",)
+AIRY_SCENES = ("水墨", "宋瓷")
+
+# 能当「金」的库内色。金黄 #f26b1f（H52.3）与金驼 #e46828（H51.4）实测落在橙区，
+# 名字带金但不是金属色，和金莲花橙、金鱼紫一样要排除。
+GOLD_NAMES = ("金盏黄", "金瓜黄", "金叶黄", "甘草黄", "姜黄")
+
 SCORE_WEIGHTS = dict(
     chroma_hierarchy=1.4,   # 彩度必须分层：主场安静、点缀跳出来
     lightness_ladder=1.1,   # 明度要拉开，否则两个色贴在一起
@@ -97,6 +116,26 @@ SCENES = {
                wuxing=("火", "水", "土"), hint="黑地朱纹或朱地黑纹，点金"),
     "年画": dict(mood="市井", families=("红", "黄", "绿"), accent_break=("绿", "红"),
                wuxing=("火", "土", "木"), hint="大红大绿，民间不怕相克"),
+    # 以下三个场景来自礼制而非工艺，各自解决一个既有场景解决不了的问题。
+    # 祭天：故宫给的是"红墙黄瓦"的暖，但清代祭祀改色——《清史稿·舆服志》皇帝朝服
+    # "色用明黄，惟祀天用蓝，朝日用红，夕月用月白"。这是唯一有原典背书的冷调宫廷方案，
+    # 也是天坛祈年殿纯青琉璃瓦的同一套逻辑。青花只有青白两色，此处允许一点朝日红破色。
+    "祭天": dict(mood="清冷", families=("蓝", "白", "青"), accent_break=("红",),
+               dom_families=("白",), sec_hue=((190, 300),), acc_hue=((20, 70), (200, 290)),
+               wuxing=("水", "金", "木"),
+               hint="祀天用蓝、夕月用月白，一点朝日红；天坛祈年殿的纯青琉璃"),
+    # 王府：琉璃瓦等第里"绿用于王府"这一级。故宫是明黄+朱红的极暖，王府降一等后
+    # 变成绿瓦红墙，冷暖对撞反而更适合屏幕——绿可以做结构色，而明黄不能。
+    "王府": dict(mood="艳", families=("绿", "白", "灰"), accent_break=("红",),
+               dom_families=("白", "灰"), acc_hue=((20, 70),),
+               wuxing=("木", "金", "火"),
+               hint="绿琉璃瓦、朱漆门、汉白玉阶，比故宫降一等的中间调"),
+    # 补服：《清史稿·舆服志》文武各品"补服，色用石青"。这是礼制里唯一的"深底+小徽章"
+    # 范式：一件石青大袍，胸背各一方补。深色模式与"低调品牌+小面积金"的现成古典依据。
+    "补服": dict(mood="浓烈", families=("蓝", "青", "灰"), accent_break=("黄",),
+               dom_families=("蓝", "青", "黑"), sec_hue=((190, 300),), acc_hue=((70, 110),),
+               wuxing=("水", "木", "土"),
+               hint="石青地一方补子，深底托一枚金线徽章"),
 }
 
 # 媒材：同一套三色，四套约束。UI 以对比度为硬闸；海报/服装不因 3:1 偷换文化色；
@@ -431,7 +470,12 @@ def dominant_pool(cat: Catalog, mood: str | None = None, seed: Color | None = No
     elif prefer == "暖":
         pool = sorted(pool, key=lambda c: -c.warmth)
     if dark:
-        pool = sorted(pool, key=lambda c: (c.L, c.C))
+        # 深底要的是「安静的深」，不是「全库最深」。按 (L, C) 排序会把
+        # 深牵牛紫 #1c0d1a（L*6、紫）顶到第一位，于是 雅/清冷/空灵 加 --dark
+        # 全部塌成同一块紫黑——既违反「主场必须安静」，也把青紫死局引进场。
+        # 先卡住深底安全区，再按彩度从低到高取，让燕颔蓝、钢蓝这类站前面。
+        safe = [c for c in pool if c.L <= DARK_GROUND_MAX_L and c.C <= DARK_GROUND_MAX_C]
+        pool = sorted(safe or pool, key=lambda c: (c.C, c.L))
     if seed is not None:
         # 有种子时，主场取与种子同冷暖、低彩的近亲，或种子自己（若它够安静）
         if seed.C <= 32 and ((not dark and seed.L >= 78) or seed.L <= 28):
@@ -537,6 +581,9 @@ class Palette:
     curated_name: str | None = None
     dark: bool = False
     media: str | None = None
+    # 手选方案的出处与注意事项的白话版。给用户念这两个，不念 rationale 里的术语版。
+    origin_plain: str | None = None
+    caution_plain: str | None = None
 
     @property
     def trio(self) -> tuple[Color, Color, Color]:
@@ -565,37 +612,84 @@ def curated_palettes(cat: Catalog, mood: str | None = None, scene: str | None = 
         pal.rationale = [f"手选方案「{entry['name']}」：{entry['source']}",
                          f"注意：{entry['caution']}"] + _rationale(pal)[:4]
         pal.curated_name = entry["name"]
+        # 白话版单独留字段。rationale 里那两条含「结构色」「彩度」「相克」这类
+        # 内部术语，照样念给用户会把分析框架泄露出去；但也不能删掉出处与注意事项
+        # ——那是这个技能最有价值的部分。所以两版并存，输出层挑一版。
+        pal.origin_plain = entry.get("source_plain") or entry.get("source")
+        pal.caution_plain = entry.get("caution_plain") or entry.get("caution")
         out.append(pal)
     out.sort(key=lambda p: -p.score["total"])
     return out
 
 
+class SeedNotFound(ValueError):
+    """种子色解析失败。必须显式报错——静默回落到默认方案是错得没有症状的那种错。"""
+
+    def __init__(self, query: str, suggestions: list[tuple[str, str]]):
+        self.query = query
+        self.suggestions = suggestions
+        hint = "，".join(f"{n} {h}" for n, h in suggestions)
+        super().__init__(f"色库里没有「{query}」。最接近的是：{hint}")
+
+
+def resolve_seed(cat: Catalog, seed: str | Color | None) -> Color | None:
+    """把 seed 解析成库内色，失败即抛错。
+
+    旧行为是解析不出就返回 None，于是 `--seed 米黄色` 静默给出与无参完全相同
+    的默认方案——用户以为品牌色生效了，其实根本没进去。
+    """
+    if seed is None or isinstance(seed, Color):
+        return seed
+    q = str(seed).strip()
+    if not q:
+        return None
+    if q.startswith("#"):
+        try:
+            return cat.snap(q)
+        except Exception as exc:
+            raise SeedNotFound(q, []) from exc
+    hit = cat.resolve(q)
+    if hit is not None:
+        return hit
+    # 给可执行的下一步：按名字里的字找同字色，再兜底给几个常见具名色
+    near = [c for c in cat.colors if any(ch in c.name for ch in q)][:5]
+    raise SeedNotFound(q, [(c.name, c.hex) for c in near])
+
+
 def generate(cat: Catalog, mood: str | None = None, scene: str | None = None,
              seed: str | Color | None = None, n: int = 5,
-             dark: bool = False, media: str | None = None) -> list[Palette]:
+             dark: bool = False, media: str | None = None,
+             pin: dict | None = None) -> list[Palette]:
     """主入口：氛围 / 场景 / 种子色 -> 若干套三色配色。
 
     手选方案优先出现（经过文化校对），算法方案补足数量与多样性。
     dark 强制深底做场，不整页反相。media 只改约束与口令，不改角色。
+    pin 把指定角色钉死（{"accent": "朱红"}），用于品牌色必须出现的场合——
+    seed 只是软锚，实测 --seed "#c1272d" 会整个漂走。
     """
     families = None
     if scene and scene in SCENES:
         mood = mood or SCENES[scene]["mood"]
         families = SCENES[scene].get("families")
-    seed_color = None
-    if isinstance(seed, Color):
-        seed_color = seed
-    elif isinstance(seed, str) and seed:
-        seed_color = cat.resolve(seed) or cat.snap(seed) if seed.startswith("#") else cat.resolve(seed)
+    seed_color = resolve_seed(cat, seed)
+    pinned = {k: (v if isinstance(v, Color) else cat.resolve(str(v)))
+              for k, v in (pin or {}).items()}
+    for role, col in pinned.items():
+        if col is None:
+            raise SeedNotFound(str((pin or {})[role]), [])
 
     curated = curated_palettes(cat, mood, scene, seed_color, dark=dark)
     dom_families = None
     if scene and scene in SCENES:
         dom_families = SCENES[scene].get("dom_families") or families
-    if dark:
-        # 暗色场不应再被「故宫主场必须是白/黄」绑死，改走同场景的深色家族
-        dom_families = None
+    if dark and scene in SCENES:
+        # 暗色场不该被「故宫主场必须是白/黄」绑死，但也不能把场景家族整个清空
+        # ——清空之后 --scene 青花 --dark 会跑到库内任意深色上，青花的语汇就没了。
+        # 正确做法是退到该场景的深色家族，仍受场景约束。
+        dom_families = tuple(f for f in (families or ()) if f not in ("白", "黄")) or None
     doms = dominant_pool(cat, mood, seed_color, dom_families, dark=dark)
+    if pinned.get("dominant"):
+        doms = [pinned["dominant"]]
     media_cfg = MEDIA.get(media or "", {})
     wall_c = media_cfg.get("wall_max_chroma")
     if wall_c is not None:
@@ -606,9 +700,12 @@ def generate(cat: Catalog, mood: str | None = None, scene: str | None = None,
     seen: set[tuple[str, str, str]] = set()
 
     for dom in doms[:12]:
-        secs = secondary_pool(cat, dom, mood, families, scene)
+        secs = [pinned["secondary"]] if pinned.get("secondary") else secondary_pool(cat, dom, mood, families, scene)
         for sec in secs[:8]:
-            accs = accent_pool(cat, dom, sec, mood, families, scene)
+            if sec.name == dom.name:
+                continue
+            accs = ([pinned["accent"]] if pinned.get("accent")
+                    else accent_pool(cat, dom, sec, mood, families, scene))
             best_for_pair: Palette | None = None
             for acc in accs[:10]:
                 key = (dom.name, sec.name, acc.name)
@@ -618,7 +715,10 @@ def generate(cat: Catalog, mood: str | None = None, scene: str | None = None,
                 pal = Palette(dom, sec, acc, sc, mood, scene, dark=dark, media=media)
                 if best_for_pair is None or sc["total"] > best_for_pair.score["total"]:
                     best_for_pair = pal
-            if best_for_pair and best_for_pair.score["total"] >= 48:
+            # 用户钉死了角色时放宽及格线：钉住本身就是他的决定，
+            # 这时候「因为分不够所以换掉他指定的色」正是必须禁止的暗中换色。
+            gate = 30 if pinned else 48
+            if best_for_pair and best_for_pair.score["total"] >= gate:
                 seen.add((best_for_pair.dominant.name, best_for_pair.secondary.name, best_for_pair.accent.name))
                 best_for_pair.rationale = _rationale(best_for_pair)
                 results.append(best_for_pair)
@@ -627,6 +727,10 @@ def generate(cat: Catalog, mood: str | None = None, scene: str | None = None,
     picked: list[Palette] = []
     dom_count: dict[str, int] = {}
     acc_count: dict[str, int] = {}
+    # 钉死角色时手选方案不参与——它们不含被钉的色，混进来等于无视用户的指定
+    if pinned:
+        curated = [p for p in curated
+                   if all(getattr(p, r).name == c.name for r, c in pinned.items())]
     for p in curated + results:
         p.dark = dark
         p.media = media
@@ -858,8 +962,122 @@ def tokens(cat: Catalog, pal: Palette) -> dict:
     }
 
 
-def css_vars(tok: dict) -> str:
-    lines = [":root {"]
+# 每个 token 欠谁多少对比度。换色时必须守住这些承诺——
+# 可读性优先于色族纯度：宁可留一个出族的色并上报，也不能换出一个读不清的字。
+TOKEN_OBLIGATIONS = {
+    "text": ("bg", 4.5),
+    "muted": ("bg", 4.5),
+    "accent_fg": ("accent", 4.5),
+    "border_strong": ("bg", 3.0),
+}
+
+
+def family_lock(cat: Catalog, tok: dict, scene: str | None) -> list[dict]:
+    """扫 token 是否漏出场景色族。返回问题列表（空表示干净）。
+
+    tokens() 的签名里没有 scene，是 scene-blind 的，所以派生层会漏色。
+    实测 --scene 青花 --dark：surface=暗龙胆紫、border=龙葵紫、
+    border_strong=山梗紫——青配紫，正是荆浩点名的死局。
+
+    语义色不参与：success/warning/error/info 的绿黄红青是文化锁，本就跨族。
+
+    候选必须同时满足该 token 的对比义务。否则会出现这种事：pick_text 正确挑了
+    燕颔蓝（4.68:1），换回场景语汇后变成苷蓝绿（4.07:1），字反而读不清了。
+    """
+    if not scene or scene not in SCENES:
+        return []
+    allowed = set(SCENES[scene].get("families") or ()) | set(NEUTRAL_FAMILIES)
+    if not allowed:
+        return []
+    issues: list[dict] = []
+    for key, col in tok.items():
+        if key in SEMANTIC_TOKENS or not isinstance(col, Color):
+            continue
+        if col.family in allowed:
+            continue
+        partner_key, min_ratio = TOKEN_OBLIGATIONS.get(key, (None, 0.0))
+        partner = tok.get(partner_key) if partner_key else None
+        # 在同明度带里找回场景语汇内的替代色，且不得破坏对比义务
+        cands = [c for c in cat.colors
+                 if c.family in allowed and abs(c.L - col.L) <= 8 and c.C <= max(col.C + 6, 14)]
+        if partner is not None:
+            cands = [c for c in cands if contrast(c, partner) >= min_ratio]
+        cands.sort(key=lambda c: (abs(c.L - col.L), abs(c.C - col.C)))
+        issue = {
+            "token": key,
+            "was": {"name": col.name, "hex": col.hex, "family": col.family},
+            "problem": f"{col.family} 不在场景「{scene}」的色族 {sorted(allowed)} 内",
+            "suggest": [{"name": c.name, "hex": c.hex} for c in cands[:3]],
+        }
+        if partner is not None and not cands:
+            issue["problem"] += (f"；但场景语汇内没有能对 {partner.name} 保住 "
+                                 f"{min_ratio}:1 的替代色，故保留原色不换")
+            issue["kept"] = True
+            issue["obligation"] = {"against": partner_key, "min_ratio": min_ratio,
+                                   "actual": round(contrast(col, partner), 2)}
+        issues.append(issue)
+    return issues
+
+
+def apply_family_lock(cat: Catalog, tok: dict, scene: str | None) -> tuple[dict, list[dict]]:
+    """把漏出色族的 token 吸回场景语汇。
+
+    换不动的（场景语汇内没有能保住对比义务的色）保留原色，并留在返回的问题列表里
+    向用户明说——静默交付一个读不清的字比出族严重得多。
+    """
+    issues = family_lock(cat, tok, scene)
+    fixed = dict(tok)
+    unresolved: list[dict] = []
+    for issue in issues:
+        if issue["suggest"]:
+            fixed[issue["token"]] = cat.by_name[issue["suggest"][0]["name"]]
+            issue["fixed_to"] = issue["suggest"][0]
+        else:
+            unresolved.append(issue)
+    return fixed, unresolved
+
+
+# AI 生成设计的三个高频撞车点。前两个是实测出来的：frontend-design 自己点名
+# 「暖奶油底 #F4F1EA + 陶土橙 #D97757」是当下最容易被认出来的 AI 默认。
+CLICHE_REFS = {
+    "cream_ground": ("#f4f1ea", 6.0),
+    "clay_accent": ("#d97757", 10.0),
+}
+
+
+def cliche_check(pal: Palette) -> list[dict]:
+    """报告是否撞上 AI 默认审美。命中不阻断，但必须显式说明差异。"""
+    out: list[dict] = []
+    ref, thr = CLICHE_REFS["cream_ground"]
+    d = ck.delta_e_hex(pal.dominant.hex, ref)
+    if d < thr:
+        out.append({
+            "flag": "cream_ground",
+            "detail": f"场 {pal.dominant.name} {pal.dominant.hex} 距通用暖奶油底 {ref} 只有 ΔE {d:.2f}",
+            "handle": f"这是{'甜白釉' if pal.scene == '青花' else '宣纸/绢地'}的白，不是默认奶油。"
+                      f"交接时写明来源，并要求下游把差异化预算花在版式与留白节奏上；"
+                      f"或换场（月白 #eef7f2 / 米色 #f9e9cd）。",
+        })
+    ref, thr = CLICHE_REFS["clay_accent"]
+    for role, col in (("accent", pal.accent), ("secondary", pal.secondary)):
+        d = ck.delta_e_hex(col.hex, ref)
+        if d < thr:
+            out.append({
+                "flag": "clay_accent",
+                "detail": f"{role} {col.name} {col.hex} 距通用陶土橙 {ref} 只有 ΔE {d:.2f}",
+                "handle": "说明这是矿物朱/银朱的来源，或换一枚更正的红（苋菜红 #a61b29 / 枫叶红 #c21f30）。",
+            })
+    if pal.dominant.L <= 22 and pal.accent.C >= 60 and pal.accent.family in ("绿", "红"):
+        out.append({
+            "flag": "acid_on_black",
+            "detail": f"深场 {pal.dominant.name} + 单一高彩{pal.accent.family} {pal.accent.name}",
+            "handle": "加一层结构色分隔，或把点缀降到中彩，避免落进「黑底 + 一枚酸色」的通用暗色模板。",
+        })
+    return out
+
+
+def css_vars(tok: dict, selector: str = ":root") -> str:
+    lines = [selector + " {"]
     mapping = [
         ("bg", "bg"), ("surface", "surface"), ("text", "text"), ("muted", "muted"),
         ("border", "border"), ("border_strong", "border-strong"),
@@ -902,20 +1120,34 @@ def visual_areas(pal: Palette) -> dict:
     i60 = intensity(pal.dominant, pal.dominant)
     i30 = intensity(pal.secondary, pal.dominant)
     i10 = intensity(pal.accent, pal.dominant)
-    raw = (60 / i60, 30 / i30, 10 / i10)
+    # 留白型方案的目标份额本来就不是 60/30/10——一张宣纸加几笔墨加一枚印，
+    # 意图是 88/9/3。只放宽下限不够：份额还是按 60/30/10 归一化的话，
+    # 主场永远到不了 85% 以上，「大面留白」就只是文案。
+    airy = (pal.mood in AIRY_MOODS) or (pal.scene in AIRY_SCENES)
+    targets = (88, 9, 3) if airy else (60, 30, 10)
+    raw = (targets[0] / i60, targets[1] / i30, targets[2] / i10)
     s = sum(raw)
     a60, a30, a10 = (x / s * 100 for x in raw)
     # 点缀按响度收面积；结构色必须仍能成「块」——能量公式会把朱红墙压得过小，
     # 那在角色上已经变成点缀。给结构留一个下限，剩下的全给主场。
     a10 = min(8.0, max(2.0, a10))
-    a30 = min(32.0, max(16.0, a30))
-    if a10 + a30 > 46.0:
-        a30 = 46.0 - a10
+    # 结构色的下限本来是为了让它仍能成「块」。留白型里这条要放松到 6%——
+    # 墨在宣纸上确实只占那么一点，再夹到 16% 就把留白挤掉了。
+    sec_floor = 6.0 if airy else 16.0
+    a30 = min(18.0 if airy else 32.0, max(sec_floor, a30))
+    cap = 20.0 if airy else 46.0
+    if a10 + a30 > cap:
+        a30 = cap - a10
     a60 = 100.0 - a10 - a30
     return {
         "pixel_pct": {"dominant": round(a60, 1), "secondary": round(a30, 1), "accent": round(a10, 1)},
         "intensity": {"dominant": round(i60, 3), "secondary": round(i30, 3), "accent": round(i10, 3)},
-        "note": "pixel_pct 是建议铺色面积，非角色额度。主场最大、结构居中、点缀最小。",
+        "airy": airy,
+        "note": "pixel_pct 是建议铺色面积，非角色额度。主场最大、结构居中、点缀最小。"
+                + ("留白型方案：目标份额按 88/9/3 算。留白型几套常常都落在 92/6/2，"
+                   "那不是没算——能量公式本身想要的更极端（结构 3.6~5.9%、点缀 0.6~1.2%），"
+                   "是下限把它拉回来的：0.6% 的点缀在界面里点不着，3.6% 的结构撑不起导航。"
+                   if airy else ""),
     }
 
 

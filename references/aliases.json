@@ -1,10 +1,10 @@
 {
  "meta": {
   "catalog_count": 526,
-  "alias_count": 140,
+  "alias_count": 144,
   "same_name_variant_count": 16,
   "rule": "输出颜色必须是 526 色库中的 target_hex，禁止使用 literary_hex，禁止发明新 hex。",
-  "note": "literary_hex 来自网络 161 色文学色卡，仅用于理解典故与提示用户『你说的石青在本色库叫群青』。"
+  "note": "literary_hex 来自网络 161 色文学色卡，仅用于理解典故与提示用户『你说的石青在本色库叫群青』。 乌金/天青/玉色 三条原为纯色差最近邻或与自身 reason 矛盾，已作文化校正（override=true）。"
  },
  "aliases": [
   {
@@ -96,15 +96,15 @@
   },
   {
    "alias": "乌金",
-   "target": "淡灰绿",
-   "target_hex": "#ad9e5f",
-   "target_pinyin": "danhuilv",
+   "target": "苍黄",
+   "target_hex": "#806332",
+   "target_pinyin": "canghuang",
    "literary_hex": "#a78e44",
    "literary_intro": "",
    "literary_family": "金银",
    "delta_e_to_literary": 5.9,
-   "override": false,
-   "reason": "按 CIEDE2000 最近邻落入 526 色库",
+   "override": true,
+   "reason": "乌金是深金——「乌」即暗。旧值是一块中彩黄绿，L*65，既不暗也不金属，且原 reason 自认只是色差最近邻，未作文化校正。苍黄 L*44 的沉与「乌」相合。",
    "alternates": [
     {
      "name": "淡灰绿",
@@ -212,16 +212,22 @@
   },
   {
    "alias": "天青",
-   "target": "霁青",
-   "target_hex": "#63bbd0",
-   "target_pinyin": "jiqing",
+   "target": "井天蓝",
+   "target_hex": "#c3d7df",
+   "target_pinyin": "jingtianlan",
    "literary_hex": null,
    "literary_intro": "",
    "literary_family": "",
    "delta_e_to_literary": null,
    "override": true,
-   "reason": "汝窑『雨过天青云破处』，青中带灰的天色，不是鲜蓝",
-   "alternates": []
+   "reason": "汝窑天青是雨后云隙的淡灰青。旧值霁青 C27.9 是明亮青蓝，与本条 reason「青中带灰，不是鲜蓝」自相矛盾。井天蓝 C8.0 才真的青中带灰。",
+   "alternates": [
+    {
+     "name": "霁青",
+     "hex": "#63bbd0",
+     "delta_e": 0.0
+    }
+   ]
   },
   {
    "alias": "妃色",
@@ -1411,15 +1417,15 @@
   },
   {
    "alias": "玉色",
-   "target": "毛绿",
-   "target_hex": "#66c18c",
-   "target_pinyin": "maolv",
+   "target": "玉簪绿",
+   "target_hex": "#a4cab6",
+   "target_pinyin": "yuzanlv",
    "literary_hex": "#2edfa3",
    "literary_intro": "玉的颜色，高雅的淡绿、淡青色",
    "literary_family": "绿",
    "delta_e_to_literary": 8.5,
-   "override": false,
-   "reason": "按 CIEDE2000 最近邻落入 526 色库",
+   "override": true,
+   "reason": "和田玉自油脂白到淡青，旧值毛绿 C43.4 是中彩鲜绿，方向相反且只是色差最近邻。玉簪绿 L*78 C17.6 是淡灰青绿。",
    "alternates": [
     {
      "name": "毛绿",
@@ -3952,6 +3958,122 @@
      "name": "苍蓝",
      "hex": "#134857",
      "delta_e": 8.3
+    }
+   ]
+  },
+  {
+   "alias": "中国红",
+   "target": "朱红",
+   "target_hex": "#ed5126",
+   "target_pinyin": "zhuhong",
+   "literary_hex": "",
+   "literary_intro": "",
+   "literary_family": "红",
+   "delta_e_to_literary": 0.0,
+   "override": true,
+   "reason": "「中国红」是泛称，色库里查无此色，也不许输出。落到具体色名：朱红是最常用的那一枚。",
+   "alternates": [
+    {
+     "name": "银朱",
+     "hex": "#f43e06",
+     "delta_e": 0.0
+    },
+    {
+     "name": "苋菜红",
+     "hex": "#a61b29",
+     "delta_e": 0.0
+    },
+    {
+     "name": "鹤顶红",
+     "hex": "#d42517",
+     "delta_e": 0.0
+    }
+   ]
+  },
+  {
+   "alias": "故宫红",
+   "target": "朱红",
+   "target_hex": "#ed5126",
+   "target_pinyin": "zhuhong",
+   "literary_hex": "",
+   "literary_intro": "",
+   "literary_family": "红",
+   "delta_e_to_literary": 0.0,
+   "override": true,
+   "reason": "故宫的红是宫墙朱红。注意红墙黄瓦是礼制建筑特例，不要整屏铺朱红当模板。",
+   "alternates": [
+    {
+     "name": "银朱",
+     "hex": "#f43e06",
+     "delta_e": 0.0
+    },
+    {
+     "name": "苋菜红",
+     "hex": "#a61b29",
+     "delta_e": 0.0
+    },
+    {
+     "name": "鹤顶红",
+     "hex": "#d42517",
+     "delta_e": 0.0
+    }
+   ]
+  },
+  {
+   "alias": "传统红",
+   "target": "朱红",
+   "target_hex": "#ed5126",
+   "target_pinyin": "zhuhong",
+   "literary_hex": "",
+   "literary_intro": "",
+   "literary_family": "红",
+   "delta_e_to_literary": 0.0,
+   "override": true,
+   "reason": "「传统红」是泛称。按用途落到具体色名，最常用的是朱红。",
+   "alternates": [
+    {
+     "name": "银朱",
+     "hex": "#f43e06",
+     "delta_e": 0.0
+    },
+    {
+     "name": "苋菜红",
+     "hex": "#a61b29",
+     "delta_e": 0.0
+    },
+    {
+     "name": "鹤顶红",
+     "hex": "#d42517",
+     "delta_e": 0.0
+    }
+   ]
+  },
+  {
+   "alias": "朱砂红",
+   "target": "银朱",
+   "target_hex": "#f43e06",
+   "target_pinyin": "yinzhu",
+   "literary_hex": "",
+   "literary_intro": "",
+   "literary_family": "红",
+   "delta_e_to_literary": 0.0,
+   "override": true,
+   "reason": "朱砂即辰砂，古代朱色颜料的来源。库内对应银朱一系，朱红是它更沉的邻色。",
+   "alternates": [
+    {
+     "name": "苋菜红",
+     "hex": "#a61b29",
+     "delta_e": 0.0
+    },
+    {
+     "name": "鹤顶红",
+     "hex": "#d42517",
+     "delta_e": 0.0
+    },
+    {
+     "name": "枫叶红",
+     "hex": "#c21f30",
+     "delta_e": 0.0
     }
    ]
   }
