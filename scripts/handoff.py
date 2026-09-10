@@ -404,6 +404,10 @@ def ornament(cat: Catalog, pal: Palette, tok: dict, motif_ids: list | None = Non
             "name": m["name"],
             "category": m["category"],
             "form": m["form"],
+            # 画法细则必须一起交出去。`form` 只有两个字（「折枝」），
+            # 而「花必五瓣、枝作顿折的硬转、不带根土」这类反俗硬规则全在
+            # form_detail 里——不交，下游只能凭「折枝」二字自己想象。
+            "form_detail": m.get("form_detail"),
             "borrows_var": f"--color-{borrow.replace('_', '-')}",
             "borrows_token": borrow,
             # 备选也要给出来。文档告诉下游「首选不可用时改指下一个」，

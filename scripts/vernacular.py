@@ -32,7 +32,12 @@ SEASON_CUES = {
     "春": ["春天", "春季", "初春", "早春", "开春", "阳春", "春日"],
     "夏": ["夏天", "夏季", "初夏", "盛夏", "仲夏", "夏日", "消暑"],
     "秋": ["秋天", "秋季", "初秋", "深秋", "金秋", "秋日", "重阳"],
-    "冬": ["冬天", "冬季", "初冬", "深冬", "隆冬", "冬日", "岁末", "年末"],
+    # 「过年 / 春节 / 新年」是最常用的冬季说法，缺了它们季节提醒在最常见的
+    # 入口上失效：「过年活动页，加点荷花」原先读不出季节，一声不响。
+    # 春节在农历属冬末（立春前后），语义上落冬这一档；它不与「春天」相撞——
+    # 两者互不为子串，而 season_of 取最长匹配。
+    "冬": ["冬天", "冬季", "初冬", "深冬", "隆冬", "冬日", "岁末", "年末",
+          "过年", "春节", "新年", "年节", "元旦"],
 }
 
 _HEX_RE = re.compile(r"#[0-9a-fA-F]{6}\b")
@@ -156,13 +161,21 @@ class Vernacular:
             return "loud"
         return None
 
-    def score(self, text: str) -> tuple[dict, list]:
+    def score(self, text: str, shadow: set | None = None) -> tuple[dict, list]:
         """按轴累加线索词权重。
 
         长词吃掉自己的字符span：「素雅」命中后，「素」和「雅」不能在同一片
         字符上再各算一次，否则 3.0 会滚成 5.4，所有含长词的句子分数虚高，
         歧义门限也就永远踩不准。cues 已按长度倒序，所以先到先占。
+
+        shadow 是被色名占住的字位。整段落在里面的线索词不计分——用户说的是
+        色名，不是那个轴。实测的三处伤害：「用漆黑做底」被判成漆器场景 3.0 分
+        （他要的是黑），「夜灰做底色」被判成深色模式 2.0 分（夜灰是浅底方案里
+        的一个色名），「主色野葡萄紫」被判成市井。词表里有 40 条单字线索，
+        `冬`（→清冷）、`漆`（→漆器）、`夜`（→dark）这类落进任何含该字的色名。
+        这与纹样别名撞色名是同一类错，同一个修法。
         """
+        shadow = shadow or set()
         scores: dict[str, dict[str, float]] = {}
         hits: list[dict] = []
         transfer = float(self.neg.get("opposite_pole_transfer", 0.0))
@@ -178,6 +191,12 @@ class Vernacular:
                 cells = set(range(pos, pos + len(word)))
                 if cells & span:
                     continue  # 这片字符已被同轴更长的线索词占了
+                # 只挡单字线索。二字以上的线索即使碰巧也是色名（石青、天青、淡青、素），
+                # 那是两条独立的轴在同一词上叠合——用户说「石青」既是色名又是补服场景，
+                # 正是设计里允许的互补。单字就不是：漆⊂漆黑、夜⊂夜灰、冬⊂忍冬，
+                # 用户说的是那个复合词，不是那个轴。
+                if len(word) == 1 and cells <= shadow:
+                    continue
                 span |= cells
                 negated = self._negated(text, pos)
                 bucket = scores.setdefault(axis, {})
@@ -201,7 +220,8 @@ class Vernacular:
     def resolve(self, text: str, catalog=None) -> Intent:
         text = (text or "").strip()
         it = Intent(text=text)
-        scores, hits = self.score(text)
+        # 先算色名占住的字位，再计分：落在色名里的**单字**线索不该选轴。
+        scores, hits = self.score(text, shadow=self._shadowed(text, catalog))
         it.scores, it.hits = scores, hits
 
         def top(axis: str) -> tuple[str | None, float]:
@@ -426,6 +446,14 @@ class Vernacular:
                 start = pos + 1
         return out
 
+    # 纹样别名**不**纳入这层遮蔽。试过，过头了：「竹子多的院子」会丢掉
+    # 江南场景（`竹`⊂竹子），而纹样与场景本是设计上互补的两条轴——
+    # 用户要竹纹，同时要江南的气质，两者都对。色名不同：说了漆黑就是要黑色，
+    # 不是要漆器那套语汇。所以只有色名构成「我说的是这个词，不是那个轴」。
+    #
+    # 代价是纹样名不能含别轴的单字线索。加纹样时 selftest 会挡：
+    # 忍冬纹 因 `冬`→清冷 被拒（敦煌是暖矿物色），改用同义的卷草纹。
+
     def match_motifs(self, text: str, scene: str | None = None,
                      season: str | None = None,
                      catalog=None) -> tuple[list, list, list]:
@@ -477,8 +505,10 @@ class Vernacular:
                 else:
                     notes.append(f"{m['name']}本是{ms}的花，你说的是{season}——"
                                  f"不算硬错，但懂的人会觉得季节没对上")
-        # 成套关系
-        ids = {m["id"] for m in kept}
+        # 成套关系。变体先折算到正位：疏影横斜站梅位、折枝竹叶站竹位，
+        # 两者同框仍是「梅竹无松」。不折算的话 6 处 pairs_with 声明是死数据，
+        # 而「疏影横斜配折枝竹叶」正是 SKILL.md 承诺会拦的那一例。
+        ids = {m.get("stands_for") or m["id"] for m in kept}
         for name, spec in (data.get("sets") or {}).items():
             members = set(spec.get("members") or [])
             inter = ids & members

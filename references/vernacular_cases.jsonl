@@ -93,3 +93,12 @@
 {"say": "盛夏的活动页，加一枝梅花", "expect": {}, "motif": "mei-zhezhi", "motif_note_contains": "季节没对上", "why": "mid 档要软说；与 none 同路等于那一档白填"}
 {"say": "春天的海报，加折枝菊", "expect": {}, "motif_note_contains": "最容易被看出来", "why": "high 档要硬说"}
 {"say": "年画风格的活动页，加点荷花", "expect": {"scene": "年画"}, "motif_note_contains": "气质不合", "no_unheard": true, "why": "已解释过被挡的原因，再报一次没接住是同一矛盾换了方向"}
+{"say": "年画风的活动页，加个连年有余", "expect": {"scene": "年画"}, "motif": "lianlian-youyu", "why": "年画一路的谐音吉语纹；莲在这里是谐音符号不跟季节"}
+{"say": "过年的页面，加牡丹团花", "expect": {"scene": "年画"}, "motif": "mudan-tuanhua", "why": "过年 是最常用的冬季说法；牡丹团花无季，不该报季节冲突"}
+{"say": "页脚加一枚盘长结", "expect": {}, "motif": "panzhang-jie", "why": "世俗吉祥结，无等级含义"}
+{"say": "敦煌风格的页首，加藻井", "expect": {"scene": "敦煌"}, "motif": "zaojing", "why": "藻井 既是敦煌场景线索又是纹样别名，两条轴互补"}
+{"say": "敦煌的边框用卷草纹", "expect": {"scene": "敦煌"}, "motif": "juancao-wen", "why": "卷草纹用这个名而不用忍冬纹：忍冬的 冬 会把暖矿物色误判成清冷"}
+{"say": "唐三彩风格，加联珠团窠", "expect": {"scene": "唐三彩"}, "motif": "lianzhu-tuanke", "why": "萨珊系外来纹样，唐代织锦大量使用"}
+{"say": "用漆黑做底", "expect": {"seed": "漆黑", "scene": null}, "why": "漆 是单字场景线索，落在色名漆黑里不该选出漆器——用户要的是黑色"}
+{"say": "夜灰做底色", "expect": {"seed": "夜灰", "dark": false}, "why": "夜 是单字 dark 线索，落在色名夜灰里不该判成深色模式"}
+{"say": "用漆黑做底，走漆器那套", "expect": {"seed": "漆黑", "scene": "漆器"}, "why": "遮蔽不许过头：色名之外真说了场景仍要命中"}

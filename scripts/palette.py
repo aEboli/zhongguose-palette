@@ -223,6 +223,23 @@ def cmd_snap(cat: Catalog, args: argparse.Namespace) -> int:
     return 0
 
 
+def _parse_pin(specs: list | None) -> dict:
+    """`--pin dominant=枫叶红` 解析。格式错抛 ValueError，由调用方打印。
+
+    抽出来是因为 cmd_generate 和 cmd_tweak 各有一份，而 tweak 那份漏了校验：
+    `--pin 枫叶红`（漏写 role=）会得到 `{'枫叶红': ''}`，然后把这个 dict 原样
+    打给用户，接着报「色库里没有「」」——一个空色名。
+    """
+    pin: dict = {}
+    for spec in (specs or []):
+        role, _, name = spec.partition("=")
+        role = role.strip()
+        if role not in ("dominant", "secondary", "accent") or not name.strip():
+            raise ValueError(f"--pin 要写成 dominant|secondary|accent=<色名>，收到的是「{spec}」")
+        pin[role] = name.strip()
+    return pin
+
+
 def _find_by_id(cat: Catalog, pal_id: str) -> tuple[Color, Color, Color]:
     """方案 id 就是三个色名拼接，无状态，不需要会话记忆。"""
     parts = [p.strip() for p in pal_id.replace("＋", "+").split("+")]
@@ -242,7 +259,13 @@ def cmd_pick(cat: Catalog, args: argparse.Namespace) -> int:
     import handoff as ho
     from engine import score_trio
 
-    dom, sec, acc = _find_by_id(cat, args.id)
+    try:
+        dom, sec, acc = _find_by_id(cat, args.id)
+    except ValueError as exc:
+        # 报错文案本身是可读的，但没人接住就成了 traceback。
+        # cmd_tweak 的 --from 已经这样接了，pick 漏了。
+        print(exc)
+        return 1
     pal = Palette(dom, sec, acc, score_trio(dom, sec, acc, args.mood),
                   args.mood, args.scene, media=args.media or "ui")
     pal.rationale = []
@@ -307,11 +330,11 @@ def cmd_tweak(cat: Catalog, args: argparse.Namespace) -> int:
     """白话微调。词义与首轮相反，走 vernacular.tweak 的独立词表。"""
     vern = Vernacular()
     tw = vern.tweak(args.text, current_mood=args.mood, current_dark=args.dark)
-    pin: dict = {}
-    if args.pin:
-        for spec in args.pin:
-            role, _, name = spec.partition("=")
-            pin[role.strip()] = name.strip()
+    try:
+        pin = _parse_pin(args.pin)
+    except ValueError as exc:
+        print(exc)
+        return 2
     if args.from_id:
         try:
             dom, sec, acc = _find_by_id(cat, args.from_id)
@@ -367,7 +390,7 @@ def cmd_motifs(cat: Catalog, args: argparse.Namespace) -> int:
     if args.category:
         ms = [m for m in ms if m["category"] == args.category]
         cross = [m for m in cross if m["category"] == args.category]
-    label = {"flora": "花卉", "landscape": "风景", "geometric": "几何", "vessel": "器物"}
+    label = {"flora": "花卉", "landscape": "风景", "geometric": "几何"}
     print(f"{len(ms)} 个纹样" + (f"（适配 {args.scene}）" if args.scene else ""))
     for m in ms:
         borrow = (m.get("borrows_token") or ["border"])[0]
@@ -438,14 +461,11 @@ def cmd_info(cat: Catalog, args: argparse.Namespace) -> int:
 
 
 def cmd_generate(cat: Catalog, args: argparse.Namespace) -> int:
-    pin: dict = {}
-    for spec in (args.pin or []):
-        role, _, name = spec.partition("=")
-        role = role.strip()
-        if role not in ("dominant", "secondary", "accent") or not name.strip():
-            print(f"--pin 要写成 dominant|secondary|accent=<色名>，收到的是「{spec}」")
-            return 2
-        pin[role] = name.strip()
+    try:
+        pin = _parse_pin(args.pin)
+    except ValueError as exc:
+        print(exc)
+        return 2
     try:
         pals = generate(cat, mood=args.mood, scene=args.scene, seed=args.seed, n=args.n,
                         dark=args.dark, media=args.media, pin=pin or None)
@@ -590,7 +610,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     mo = sub.add_parser("motifs", help="列出中国风纹样点缀")
     mo.add_argument("--scene", choices=list(SCENES))
-    mo.add_argument("--category", choices=["flora", "landscape", "geometric", "vessel"])
+    # vessel（器物）在数据 schema 里保留，但当前 22 条纹样一条都没有。
+    # 放进 choices 会让用户照 --help 跑出「0 个纹样」——空选项是陷阱。
+    # 有器物纹样进表时再加回来，selftest 会守「choices 里每一档都有货」。
+    mo.add_argument("--category", choices=["flora", "landscape", "geometric"])
     mo.set_defaults(func=cmd_motifs)
 
     s = sub.add_parser("search", help="检索色库")

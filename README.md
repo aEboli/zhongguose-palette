@@ -65,7 +65,7 @@ $ python scripts/palette.py ask "茶叶小店的网站，安静一点"
 | 三色等权 | 主次点缀一样响，像广告布 | 按响度派角色，铺满的那层强制安静 |
 | 面积当比例 | 把高彩点缀真铺成一整条色带 | 按感知能量反推建议铺色面积，点缀通常只有 2~5% |
 | 文化错配 | 「石青」给成薄荷绿、故宫配色出现品红 | 144 条别名做文化校正，场景限定色相窗口 |
-| 要先学术语 | 得先知道「故宫 / 青花 / 雅 / 空灵」才能开口 | `ask` 吃一句人话，567 条线索词 + 95 条回归用例兜住 |
+| 要先学术语 | 得先知道「故宫 / 青花 / 雅 / 空灵」才能开口 | `ask` 吃一句人话，567 条线索词 + 104 条回归用例兜住 |
 
 具体能力：
 
@@ -75,9 +75,9 @@ $ python scripts/palette.py ask "茶叶小店的网站，安静一点"
 - **20 套手选方案**：经过文化校对，与算法方案同场评分排序
 - **暗色模式**：深底做场，不是把浅色方案整页反相
 - **别名解析**：石青、玄色、胭脂、竹青、天青、黛、漆黑、墨色、中国红…告诉你库内对应哪一色
-- **22 个纹样点缀**：梅兰竹菊莲、远山水纹、回纹冰裂锦地——借已有颜色画，不占配比
+- **28 个纹样点缀**：梅兰竹菊莲、远山水纹、回纹冰裂锦地、卷草藻井团花——借已有颜色画，不占配比
 - **交接合同**：一条命令产出 `handoff.json` + `palette.css`，供其他设计技能读
-- **1484 项回归测试**：色彩数学、色库完整性、白话映射、术语泄露、对比度闸门
+- **1750 项回归测试**：色彩数学、色库完整性、白话映射、术语泄露、对比度闸门
 
 ---
 
@@ -402,7 +402,7 @@ python scripts/selftest.py
 ```
 
 `preview` 产出的 HTML 里色条按真实建议铺色面积等比画（不是硬编码的 6/3/1）。
-`selftest.py` 应输出「全部通过」，共 1484 项断言。改分类、评分或白话词表后必须跑通。
+`selftest.py` 应输出「全部通过」，共 1750 项断言。改分类、评分或白话词表后必须跑通。
 
 ### 命令总表
 
@@ -533,7 +533,8 @@ python scripts/palette.py pick "鱼肚白+战舰灰+银朱" --scene 水墨 --med
 ## 纹样点缀
 
 除了配色，还能给出中国风的**点缀**：梅兰竹菊莲这类花卉、水墨风景（远山、水纹、云气）、
-几何锦地（回纹、万字、冰裂、缠枝莲）。
+几何锦地（回纹、万字、冰裂、缠枝莲）、年画吉语（连年有余、牡丹团花、盘长结）、
+敦煌一路（藻井套叠、卷草纹、联珠团窠）。
 
 **纹样借色，不占色位。** 它借用已有 token 的颜色，资产里一个色值字符都没有，
 不引入新 hex。一枝用点缀色画的梅，它**就是**那 3%，不是额外加的一块红。
@@ -553,9 +554,9 @@ $ python scripts/palette.py ask "茶室的网站，加一枝梅花点缀"
 看清单、定妆时带上：
 
 ```bash
-python scripts/palette.py motifs                       # 全部 22 个
+python scripts/palette.py motifs                       # 全部 28 个
 python scripts/palette.py motifs --scene 水墨           # 只看适配某场景的
-python scripts/palette.py motifs --category landscape   # flora/landscape/geometric/vessel
+python scripts/palette.py motifs --category landscape   # flora / landscape / geometric
 
 python scripts/palette.py pick "鱼肚白+战舰灰+银朱" --scene 水墨 --media ui   --motif mei-zhezhi --motif yuanshan-yixian
 ```
@@ -699,7 +700,7 @@ from handoff import sequential, categorical    # 图表色
 
 ### 6. 白话映射必须能回归
 
-映射规则写在 `references/vernacular.json` 而不是提示词散文里，配 95 条用例由 `selftest.py` 消费。理由和第 3 节一样：写在散文里的规则会随模型版本漂移，而漂移的症状看起来像「颜色选得不好」，于是会去调评分权重，真正错的却是意图识别。
+映射规则写在 `references/vernacular.json` 而不是提示词散文里，配 104 条用例由 `selftest.py` 消费。理由和第 3 节一样：写在散文里的规则会随模型版本漂移，而漂移的症状看起来像「颜色选得不好」，于是会去调评分权重，真正错的却是意图识别。
 
 设计上的三处要点：
 
@@ -762,8 +763,8 @@ zhongguose-palette/
 │   ├── aliases.json             144 条经典色名 → 库内色（含文化校正与泛称红）
 │   ├── curated.json             20 套手选方案（含白话版出处与注意事项）
 │   ├── vernacular.json          白话 → 内部轴的映射表（567 条线索词）
-│   ├── vernacular_cases.jsonl   95 条映射回归用例
-│   ├── motifs.json              22 个纹样点缀（借色规则、墨量、季节、礼制禁忌）
+│   ├── vernacular_cases.jsonl   104 条映射回归用例
+│   ├── motifs.json              28 个纹样点缀（借色规则、墨量、季节、礼制禁忌）
 │   ├── motifs.md                纹样用法：借色三形态、两套账、alpha 上限、开光
 │   ├── rules.md                 16 条铁律与常见失败
 │   ├── tweaks.md                白话微调词表
@@ -782,7 +783,7 @@ zhongguose-palette/
     ├── taxonomy.py              色系、五行、四季、角色
     ├── build_catalog.py         从 source.json 重建色库
     ├── build_aliases.py         重建别名表
-    └── selftest.py              1484 项回归
+    └── selftest.py              1750 项回归
 ```
 
 ---

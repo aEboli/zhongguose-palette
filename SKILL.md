@@ -33,7 +33,7 @@ python scripts/palette.py ask "茶叶小店的网站，安静一点"
 | 给了两个色要补全 | `complete <色A> <色B>` |
 | 问某个色名 | `info <色名>`（别名会解析：石青 → 群青） |
 | 给了库外 hex | `snap "#xxxxxx"` |
-| 提到梅兰竹菊、荷花、远山、水纹、回纹这类纹样 | `ask` 会自己认出来并给点缀。细则读 `references/motifs.md` |
+| 提到梅兰竹菊、荷花、远山、水纹、回纹、卷草、藻井、团花这类纹样 | `ask` 会自己认出来并给点缀。细则读 `references/motifs.md` |
 | 要看有哪些纹样 | `motifs`（可加 `--scene` / `--category`） |
 | 要做图表 | 读 `references/dataviz.md`，用 `pick` 产出的 `chart` 段 |
 | 要和别的设计技能配合 | 读 `references/handoff.md` |

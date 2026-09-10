@@ -25,7 +25,8 @@
    "pairs_with": "成套关系：与谁同属一组",
    "aliases": "白话线索词",
    "ink_range": "ink_pct 的数值形式 [lo, hi]，供 charge 计算。散文一律不进这两个字段",
-   "ink_note": "墨量的限定说明（仅框内着墨、仅地）。原先混在 ink_pct 里，导致打印出「墨量 框内着墨 ≤8%」"
+   "ink_note": "墨量的限定说明（仅框内着墨、仅地）。原先混在 ink_pct 里，导致打印出「墨量 框内着墨 ≤8%」",
+   "stands_for": "变体站的是哪个正位（正位 id）。pairs_with 只说「属于哪套」，成套判定还要知道它占了哪一格：疏影横斜站梅位、折枝竹叶站竹位，两者同框仍是「梅竹无松」。没有这个字段时 6 处变体声明是死数据——用变体说法点名成套，一声不响。"
   }
  },
  "ink_sources": {
@@ -92,7 +93,8 @@
     "梅兰竹菊",
     "四君子",
     "四条屏"
-   ]
+   ],
+   "member_note": "members 列正位 id。变体通过 stands_for 折算到正位后参与判定，所以「疏影横斜配折枝竹叶」与「一枝梅配竹节」触发同一条提醒。"
   },
   "岁寒三友": {
    "members": [
@@ -105,7 +107,8 @@
     "岁寒三友",
     "松竹梅",
     "松竹梅三友"
-   ]
+   ],
+   "member_note": "members 列正位 id。变体通过 stands_for 折算到正位后参与判定，所以「疏影横斜配折枝竹叶」与「一枝梅配竹节」触发同一条提醒。"
   },
   "三远": {
    "members": [
@@ -119,7 +122,8 @@
     "三远法",
     "高远深远平远",
     "高远深远与平远"
-   ]
+   ],
+   "member_note": "members 列正位 id。变体通过 stands_for 折算到正位后参与判定，所以「疏影横斜配折枝竹叶」与「一枝梅配竹节」触发同一条提醒。"
   }
  },
  "taboo": {
@@ -293,6 +297,7 @@
    "pairs_with": [
     "岁寒三友"
    ],
+   "stands_for": "mei-zhezhi",
    "aliases": [
     "疏影横斜",
     "斜枝梅",
@@ -374,6 +379,7 @@
    "pairs_with": [
     "四君子"
    ],
+   "stands_for": "lan-congsheng",
    "aliases": [
     "兰叶",
     "小兰叶",
@@ -454,6 +460,7 @@
     "四君子",
     "岁寒三友"
    ],
+   "stands_for": "zhu-jiezhu",
    "aliases": [
     "竹叶",
     "折枝竹"
@@ -1047,6 +1054,7 @@
     "四君子",
     "岁寒三友"
    ],
+   "stands_for": "zhu-jiezhu",
    "aliases": [
     "竹石",
     "竹石一角",
@@ -1093,6 +1101,252 @@
     "松针",
     "古松",
     "松树"
+   ]
+  },
+  {
+   "id": "lianlian-youyu",
+   "name": "连年有余",
+   "category": "flora",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "莲鱼相叠",
+   "form_detail": "一莲一鱼上下相叠或鱼衔莲茎，取「莲=连、鱼=余」的谐音。鱼作侧身，尾上扬；莲只取一叶一花，不作水面",
+   "borrows_token": [
+    "border_strong",
+    "secondary",
+    "accent"
+   ],
+   "under_text": false,
+   "coverage_pct": "6-10",
+   "ink_pct": "0.6-1.2",
+   "ink_range": [
+    0.6,
+    1.2
+   ],
+   "placement": "页脚吉语区、卡片角标、优惠券花头；成对时左右对置",
+   "css_hint": "width: clamp(120px, 14vw, 220px)；鱼身借 border_strong，莲叶借 secondary",
+   "fits_scenes": [
+    "年画",
+    "江南",
+    "唐三彩"
+   ],
+   "avoid_scenes": [
+    "水墨",
+    "补服",
+    "祭天"
+   ],
+   "culture_note": "谐音吉语纹，纯世俗，无等级含义。这里的莲是谐音符号不是节令花，所以不跟季节——与水面浮叶那条正相反，别混用。",
+   "pairs_with": [],
+   "aliases": [
+    "连年有余",
+    "年年有余",
+    "莲鱼",
+    "有余纹",
+    "鲤鱼纹"
+   ]
+  },
+  {
+   "id": "mudan-tuanhua",
+   "name": "牡丹团花",
+   "category": "flora",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "团窠",
+   "form_detail": "牡丹作正视全开，花心居中，花瓣层层向外作圆形收边，外可加一圈联珠或卷草。团窠即圆形适合纹样，不是写生折枝",
+   "borrows_token": [
+    "border",
+    "border_strong"
+   ],
+   "under_text": false,
+   "coverage_pct": "8-14",
+   "ink_pct": "1-2",
+   "ink_range": [
+    1.0,
+    2.0
+   ],
+   "placement": "版心正中、卡片中央、按钮组背后的单枚圆饰；一屏一枚，不作连续",
+   "css_hint": "width: clamp(160px, 20vw, 300px)；aspect-ratio: 1；正圆外接框",
+   "fits_scenes": [
+    "年画",
+    "故宫",
+    "唐三彩",
+    "王府",
+    "漆器"
+   ],
+   "avoid_scenes": [
+    "水墨",
+    "宋瓷"
+   ],
+   "culture_note": "富贵纹，唐以后世俗化彻底，无等级含义。作团窠时必须正圆——椭圆或方角会读成现代 logo。",
+   "pairs_with": [],
+   "aliases": [
+    "牡丹团花",
+    "牡丹纹",
+    "富贵牡丹",
+    "团窠牡丹"
+   ]
+  },
+  {
+   "id": "panzhang-jie",
+   "name": "盘长结",
+   "category": "geometric",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "单枚结体",
+   "form_detail": "绳线往复穿绕成闭合回环，无起点无终点，取「绵长不断」意。线宽须匀，转折处不作圆角——圆角会读成现代图标",
+   "borrows_token": [
+    "border_strong",
+    "border"
+   ],
+   "under_text": false,
+   "coverage_pct": "3-6",
+   "ink_pct": "0.4-0.8",
+   "ink_range": [
+    0.4,
+    0.8
+   ],
+   "placement": "页脚居中一枚、分节处的结点、题名下方的小徽记",
+   "css_hint": "width: clamp(48px, 6vw, 96px)；stroke-width 保持 2-3px 不随尺寸缩放",
+   "fits_scenes": [
+    "年画",
+    "故宫",
+    "王府",
+    "漆器",
+    "补服"
+   ],
+   "avoid_scenes": [
+    "水墨"
+   ],
+   "culture_note": "世俗吉祥纹，无等级含义。与佛教吉祥结（八吉祥之一）形近，佛教语境里要连同其余七宝一起用，单出会读成半套。",
+   "pairs_with": [],
+   "aliases": [
+    "盘长结",
+    "盘长纹",
+    "吉祥结",
+    "如意结",
+    "中国结"
+   ]
+  },
+  {
+   "id": "zaojing",
+   "name": "藻井套叠",
+   "category": "geometric",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "方井套叠",
+   "form_detail": "大方框内套小方框，逐层缩进并逐层旋转 45°，井心留一朵团花。层数取三到五，再多就糊",
+   "borrows_token": [
+    "border",
+    "surface"
+   ],
+   "under_text": true,
+   "coverage_pct": "10-18",
+   "ink_pct": "0.5-1",
+   "ink_range": [
+    0.5,
+    1.0
+   ],
+   "placement": "页首整幅底纹、模态框背后、分节大标题的背衬；井心对准标题",
+   "css_hint": "正文区 alpha ≤.06；井心团花可借 border_strong 单独提一档",
+   "fits_scenes": [
+    "敦煌",
+    "故宫",
+    "唐三彩"
+   ],
+   "avoid_scenes": [
+    "水墨",
+    "宋瓷",
+    "江南"
+   ],
+   "culture_note": "石窟窟顶的仿木构装饰，宗教建筑构件而非法器，作装饰无禁忌。但它是「顶」的语汇——压在页脚会读成倒置。",
+   "pairs_with": [],
+   "aliases": [
+    "藻井",
+    "藻井套叠",
+    "方井套叠",
+    "井心花"
+   ]
+  },
+  {
+   "id": "juancao-wen",
+   "name": "卷草纹",
+   "category": "geometric",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "二方连续",
+   "form_detail": "茎作 S 形连续翻卷，每个转折处生一叶或半叶，叶尖回勾。北朝的忍冬纹是它的前身（三叶一组、较瘦），唐以后叶片肥厚化即成卷草",
+   "borrows_token": [
+    "border",
+    "border_strong"
+   ],
+   "under_text": true,
+   "coverage_pct": "8-14",
+   "ink_pct": "0.5-1.2",
+   "ink_range": [
+    0.5,
+    1.2
+   ],
+   "placement": "页眉带、页脚带、侧栏竖带、大图上下沿；横向连续不断头",
+   "css_hint": "正文区 alpha .05~.08；background-repeat: repeat-x；单元宽 120-180px",
+   "fits_scenes": [
+    "敦煌",
+    "唐三彩",
+    "故宫",
+    "王府",
+    "漆器"
+   ],
+   "avoid_scenes": [
+    "水墨",
+    "宋瓷"
+   ],
+   "culture_note": "最安全的敦煌边饰，无等级也无宗教限定。名字用「卷草」不用「忍冬」——后者带的「冬」字会把敦煌的暖矿物色误判成清冷，两者在纹样学上本就是同一路的早晚期。",
+   "pairs_with": [],
+   "aliases": [
+    "卷草纹",
+    "卷草",
+    "蔓草纹",
+    "卷草带"
+   ]
+  },
+  {
+   "id": "lianzhu-tuanke",
+   "name": "联珠团窠",
+   "category": "geometric",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "团窠环列",
+   "form_detail": "一圈等大圆珠串成环，环内留空或置单枚花头。珠径与珠距相等，环径不小于正文行高的四倍——再小珠子就并成一条线",
+   "borrows_token": [
+    "border",
+    "border_strong"
+   ],
+   "under_text": true,
+   "coverage_pct": "5-10",
+   "ink_pct": "0.3-0.7",
+   "ink_range": [
+    0.3,
+    0.7
+   ],
+   "placement": "头像框、图片外框、徽记外圈、单元格角饰；作框不作底",
+   "css_hint": "border-radius: 50%；珠径 clamp(4px, .5vw, 8px)；环径 ≥ 4× line-height",
+   "fits_scenes": [
+    "敦煌",
+    "唐三彩",
+    "补服",
+    "王府"
+   ],
+   "avoid_scenes": [
+    "水墨",
+    "宋瓷",
+    "江南"
+   ],
+   "culture_note": "经中亚传入的萨珊系纹样，唐代织锦大量使用。它是外来语汇的中国化，用在敦煌与唐三彩最准；放进水墨会显得不是一路。",
+   "pairs_with": [],
+   "aliases": [
+    "联珠团窠",
+    "联珠纹",
+    "团窠",
+    "联珠圈"
    ]
   }
  ]

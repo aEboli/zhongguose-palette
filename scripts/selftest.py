@@ -363,6 +363,27 @@ def test_motifs() -> None:
     check(len(ms) >= 16, f"纹样 ≥16 条，实际 {len(ms)}")
     ids = [m["id"] for m in ms]
     check(len(set(ids)) == len(ids), "纹样 id 必须唯一")
+    # CLI 的 --category 选项必须每档都有货。空选项是陷阱：用户照 --help
+    # 跑 `motifs --category vessel` 会得到「0 个纹样」。
+    from collections import Counter
+    cats = Counter(m["category"] for m in ms)
+    check("flora" in cats and "landscape" in cats and "geometric" in cats,
+          f"三类主分类都必须有货，实得 {dict(cats)}")
+    check("vessel" not in cats,
+          f"vessel 当前无货（{cats.get('vessel', 0)} 条），不该出现在 --category 选项里")
+    # CLI 与文档都不该提当前无货的类别。问 --help 比读源码字符串稳。
+    import subprocess as _sp
+    env0 = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8", NO_COLOR="1")
+    h = _sp.run([sys.executable, str(ROOT / "scripts" / "palette.py"), "motifs", "--help"],
+                capture_output=True, text=True, encoding="utf-8", env=env0, cwd=str(ROOT))
+    for cat_name in ("flora", "landscape", "geometric"):
+        check(cat_name in h.stdout, f"--help 里应有类别 {cat_name}")
+    for empty in [c for c in ("vessel",) if c not in cats]:
+        check(empty not in h.stdout,
+              f"--help 里不该有空类别 {empty}——用户照它跑会得到「0 个纹样」")
+        for doc in ("README.md", "references/motifs.md"):
+            txt = (ROOT / doc).read_text(encoding="utf-8")
+            check(empty not in txt, f"{doc} 里不该提空类别 {empty}")
 
     # 核心约束：资产里不许有任何色值，只许借 token
     LEGAL = set(TOKEN_KEYS) | {"bg"}
@@ -385,15 +406,70 @@ def test_motifs() -> None:
     check(not (refs - set(data.get("sets") or {})),
           f"pairs_with 引用了未定义的套 {refs - set(data.get('sets') or {})}")
 
+    # pairs_with 不许是死数据：声明属于某套却既不在 members 里、也没给
+    # stands_for 折算到正位的，那条声明永远不参与判定。
+    # 实测过 6 处（疏影横斜、兰叶小丛、折枝竹叶、竹石一角），于是
+    # 「疏影横斜配折枝竹叶」这种梅竹无松一声不响——那正是 SKILL.md 承诺会拦的。
+    for m in ms:
+        for s in (m.get("pairs_with") or []):
+            members = set((data["sets"].get(s) or {}).get("members") or [])
+            stands = m.get("stands_for")
+            check(m["id"] in members or (stands and stands in members),
+                  f"{m['id']} 声明属于「{s}」，却既不在其 members 也没 stands_for 折算——"
+                  f"这条声明是死数据")
+        if m.get("stands_for"):
+            check(m["stands_for"] in ids, f"{m['id']} 的 stands_for 指向不存在的 {m['stands_for']}")
+            check(m["stands_for"] != m["id"], f"{m['id']} 的 stands_for 不该指向自己")
+
     # 别名必须 ≥2 字，且不得是现有线索词的子串——否则会误触发。
     # 实测过的三个坑：荷 会在「薄荷绿」里命中，松 会在「轻松」里命中，
     # 石 被「石窟/石青」占满。
     v = Vernacular()
+
+    # 落在色名里的线索词不许选轴。词表有 40 条单字线索，
+    # 冬（→清冷）、漆（→漆器）、夜（→dark）、野（→市井）这类会落进
+    # 任何含该字的色名。实测伤害：「用漆黑做底」判成漆器场景 3.0 分，
+    # 「夜灰做底色」判成深色模式——夜灰是浅底方案里的一个色名。
+    cat_s = Catalog()
+    for say, seed_want in [("用漆黑做底", "漆黑"), ("夜灰做底色", "夜灰"),
+                           ("主色野葡萄紫", "野葡萄紫"), ("茶褐色的页面", "茶褐")]:
+        it_s = v.resolve(say, catalog=cat_s)
+        check(it_s.seed == seed_want, f"「{say}」应解析出 seed {seed_want}，实得 {it_s.seed}")
+        check(it_s.scene is None, f"「{say}」的色名不该选出场景，实得 {it_s.scene}")
+        check(not it_s.dark, f"「{say}」的色名不该判成深色，实得 dark={it_s.dark}")
+    # 遮蔽不许过头：色名之外真说了那个轴仍要命中
+    it_s = v.resolve("用漆黑做底，走漆器那套", catalog=cat_s)
+    check(it_s.seed == "漆黑" and it_s.scene == "漆器",
+          f"色名外真说了场景仍要命中，实得 seed={it_s.seed} scene={it_s.scene}")
+    it_s = v.resolve("古朴一点，用淡灰绿", catalog=cat_s)
+    check(it_s.mood == "古朴" and it_s.seed == "淡灰绿",
+          f"色名外真说了氛围仍要命中，实得 mood={it_s.mood} seed={it_s.seed}")
     for m in ms:
         for al in (m.get("aliases") or []):
             check(len(al) >= 2, f"{m['id']} 的别名「{al}」太短，会误触发")
             hit = [c for _a, _v, c, _w in v.cues if al != c and al in c]
             check(not hit, f"{m['id']} 的别名「{al}」是现有线索词 {hit[:2]} 的子串，会误触发")
+
+    # 别名不许夹带**方向相反**的单字线索。纹样别名不进色名遮蔽
+    # （纹样与场景是互补的两条轴，「竹子多的院子」该同时得到竹纹与江南），
+    # 代价就是纹样名自己不能夹带反方向的单字线索。
+    #
+    # 只查氛围的冷暖冲突。场景与场景不算冲突——`梅`→江南 与 水墨/宋瓷 是同族
+    # 文人语汇，评分自会挑一个。真正的伤害是暖场景被判成冷：忍冬纹 里的
+    # `冬`→清冷 会把敦煌的暖矿物色推冷，而用户说的是一种卷草。撞了改同义名
+    # （忍冬纹 -> 卷草纹）。反过来 冰裂纹 的 `冰`→清冷 与宋瓷一致，不算夹带。
+    WARM = {"敦煌", "年画", "唐三彩", "故宫", "漆器", "王府"}
+    COLD_MOODS = ("清冷", "空灵")
+    for m in ms:
+        fits = set(m.get("fits_scenes") or [])
+        if not (fits & WARM) or (fits - WARM):
+            continue  # 只管纯暖场景的纹样；跨冷暖的本就两头沾
+        for al in (m.get("aliases") or []):
+            for axis, value, cue, _w in v.cues:
+                if len(cue) == 1 and cue in al and axis == "mood" and value in COLD_MOODS:
+                    check(False, f"{m['id']} 的别名「{al}」夹带单字线索「{cue}」"
+                                 f"（→{value}），而它只适配暖场景 {sorted(fits)}——"
+                                 f"改用不含该字的同义名")
 
     # ink_pct 必须是可打印的纯区间串，ink_range 必须是可计算的数值对。
     # 混在一起会同时坏两头：打印出「墨量 框内着墨 ≤8%」（拼死一个 %），
@@ -572,10 +648,26 @@ def test_motifs() -> None:
     it = v.resolve("想用五爪龙做 logo", catalog=cat)
     check(any("五爪龙" in n and "改法" in n for n in it.motif_notes),
           "五爪龙应被挡住并给替代方案")
-    # 季节线索必须真能读出
+    # 季节线索必须真能读出——每一个词，不只是首词。
+    # 只测首词的话，「消暑」「重阳」「金秋」「过年」这类长尾说法从未被读过一次，
+    # 而它们才是真实说法，也是这一轴的价值所在。
     for season, cues in SEASON_CUES.items():
-        got = v.season_of(cues[0])
-        check(got == season, f"季节线索「{cues[0]}」应读出 {season}，实得 {got}")
+        for cue in cues:
+            got = v.season_of(cue)
+            check(got == season, f"季节线索「{cue}」应读出 {season}，实得 {got}")
+    # 跨季节不许有子串冲突：season_of 取最长匹配，若「小春」进了冬档
+    # 就会污染「春」的判定。加词时这条会先红。
+    for s1, c1 in SEASON_CUES.items():
+        for s2, c2 in SEASON_CUES.items():
+            if s1 == s2:
+                continue
+            clash = [(a, b) for a in c1 for b in c2 if a in b or b in a]
+            check(not clash, f"季节词跨档相撞：{s1} 与 {s2} 之间 {clash[:2]}")
+    # 最常见的冬季说法必须能驱动季节提醒
+    for say in ("过年活动页，加点菊花", "春节的页面，加折枝菊"):
+        it = v.resolve(say, catalog=cat)
+        check(any("秋" in n for n in it.motif_notes),
+              f"「{say}」应报季节冲突（菊属秋），实得 {it.motif_notes}")
 
     # season_rigidity 的每个档位都要有可观测行为。mid 原先与 none 同路，
     # 等于那一档白填：折枝梅标着 mid，「盛夏加一枝梅花」却一声不响。
@@ -613,6 +705,9 @@ def test_ornament_handoff() -> None:
     import handoff as ho
     cat = Catalog()
     pals = generate(cat, scene="水墨", media="ui", n=1)
+    # 先断言再 return。裸 `if not pals: return` 会让整个函数 0 条断言静默通过——
+    # 水墨出不了方案时，这一整组纹样交接的检查就凭空消失了，而末行仍写「全部通过」。
+    check(bool(pals), "水墨应能出方案（否则下面整组纹样交接断言全部跳过）")
     if not pals:
         return
     data = ho.build(cat, pals[0], motif_ids=["mei-zhezhi", "yuanshan-yixian"])
@@ -629,6 +724,8 @@ def test_ornament_handoff() -> None:
               f"{c['name']} 必须借 CSS 变量，实得 {c['borrows_var']}")
         check(c.get("ink_pct") is not None, f"{c['name']} 缺墨量")
         check(c.get("placement"), f"{c['name']} 缺落位")
+        # 画法细则要一起交。form 只有两字，反俗硬规则全在 form_detail 里。
+        check(c.get("form_detail"), f"{c['name']} 缺画法细则（form_detail）")
     check(orn["render"]["preferred"] == "mask", "渲染首选应是 mask")
     check(len(orn["render"]["must_not"]) >= 3, "必须列出禁止的渲染形态")
     # 墨量预算与配比额度是两套账，但要给出耦合规则

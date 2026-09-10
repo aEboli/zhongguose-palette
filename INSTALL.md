@@ -23,7 +23,7 @@ python --version          # 应 ≥ 3.10
 python scripts/selftest.py   # 应输出「全部通过」
 ```
 
-`selftest.py` 共 1484 项断言，覆盖色彩数学、色库完整性、别名文化校正、白话映射、
+`selftest.py` 共 1750 项断言，覆盖色彩数学、色库完整性、别名文化校正、白话映射、
 术语泄露、对比度闸门、暗底安全区、交接文件字段、README 里写出来的每条命令。
 跑一次约需 1~2 分钟（其中一组会真的启动子进程跑 CLI）。
 
@@ -181,7 +181,7 @@ HSL、HSV、Lab、LCH、对比度、APCA、色系、五行、四季、明度带�
 
 - `references/aliases.json` —— 144 条经典色名 → 库内色的映射，含文化校正理由
 - `references/vernacular.json` —— 567 条白话线索词 → 场景/氛围/媒材的映射表
-- `references/motifs.json` —— 22 个纹样点缀，含借色规则、墨量预算、季节与礼制禁忌
+- `references/motifs.json` —— 28 个纹样点缀，含借色规则、墨量预算、季节与礼制禁忌
 
 ## 排错
 
