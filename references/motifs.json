@@ -1,0 +1,1099 @@
+{
+ "meta": {
+  "note": "中国风纹样作点缀。梅兰竹菊莲等花卉、水墨风景、几何纹样。",
+  "prime_rule": "纹样是点缀，不是第四个配比色。它必须借用已有 token 的颜色（borrows_token），资产里一个色值字符都没有，不引入新 hex，也不让整体彩度负担上升。",
+  "two_budgets": "纹样的墨量（ink_pct）与三色的铺色面积（pixel_pct）是两套账。只有彩度型借色按折扣计费到 accent 的额度上；中性借色零计费——因为那些 token 本来就没有 pixel_pct 可扣，写『从预算里扣』会留下未定义分支。判据是**实测彩度 C≥12**，不是 token 叫什么名字：年画的 surface 是荔肉白 C=13.2、border 是菊蕾白 C=20.8，都在彩度档，而水墨的 accent 是银灰 C=10.8，反倒零计费。把 surface / border 当成「中性」的同义词是错的，那只在素净场景里偶然成立。",
+  "ink_pct_def": "ink_pct = tile_coverage × patterned_share × layer_opacity × 100。tile_coverage 是单个瓦片按 alpha 加权积分得到的墨占比（资产生成时算好，下游不必栅格化）。这样它与 pixel_pct 同量纲，可以并排放进 verify。",
+  "scene_scope": "fits_scenes / avoid_scenes 只允许 engine.SCENES 里真实存在的 12 个场景：故宫 青花 水墨 敦煌 宋瓷 唐三彩 江南 漆器 年画 祭天 王府 补服。",
+  "cue_rule": "aliases 里的线索词必须 ≥2 字，且不得是 vernacular.json 现有线索词的子串。单字会误触发：荷 会在『薄荷绿』里命中，松 会在『轻松』里命中，石 被『石窟/石青』占满。selftest 有断言挡这条。aliases 还不得是色库色名或别名的子串：荷花 ⊂ 荷花白、莲花 ⊂ 金莲花橙、荷叶 ⊂ 荷叶绿、远山 ⊂ 远山紫。这四条撞名会让「用荷花白做底色」既解析出 seed 又凭空多一枝荷，岁末场景下还会训话说季节错。代码侧按「更长的色名遮蔽更短的纹样别名」处理，selftest 两头都有断言。",
+  "field_help": {
+   "id": "稳定标识，英文小写加连字符",
+   "name": "中文名，给用户念的",
+   "category": "flora 花卉 / landscape 风景 / geometric 几何 / vessel 器物",
+   "season": "季节归属。用错季节是最容易被认出来的错（冬天的页面画荷花）",
+   "season_rigidity": "季节刚性 high/mid/none —— none 表示四季可用",
+   "form": "典型画法形态：折枝 / 缠枝 / 丛生 / 一枝斜出 / 水面浮叶 / 二方连续 …",
+   "borrows_token": "借哪个 token 的色。可给多个，按优先序",
+   "under_text": "是否允许压在正文下。true 时受 alpha 上限约束",
+   "coverage_pct": "占版面积（不是墨量）",
+   "ink_pct": "实际墨量的可读区间串（供打印，形如 0.8-1.8 或 ≤0.4），**按整版折算**，与 pixel_pct 同量纲。踩过的坑：高远主峰原先写 ≤8，那是框内占比，与其余 21 条差一个数量级，于是计费闸门把一条正常纹样判成超额。框内口径一律进 ink_note。",
+   "placement": "落位",
+   "css_hint": "尺寸建议，供下游直接用",
+   "fits_scenes": "适配场景",
+   "avoid_scenes": "要避开的场景",
+   "culture_note": "文化脚注。空表示无特别风险",
+   "pairs_with": "成套关系：与谁同属一组",
+   "aliases": "白话线索词",
+   "ink_range": "ink_pct 的数值形式 [lo, hi]，供 charge 计算。散文一律不进这两个字段",
+   "ink_note": "墨量的限定说明（仅框内着墨、仅地）。原先混在 ink_pct 里，导致打印出「墨量 框内着墨 ≤8%」"
+  }
+ },
+ "ink_sources": {
+  "note": "合法借色源只有这 8 个。其余 9 个 token 一律禁止借：accent_fg / accent_hover / accent_active 是交互态，success / warning / error / info 是语义徽章色，disabled 是失能态，ring 是焦点环——纹样借它们等于把状态语义泄进装饰层。",
+  "allowed": [
+   "bg",
+   "surface",
+   "border",
+   "border_strong",
+   "muted",
+   "text",
+   "secondary",
+   "accent"
+  ],
+  "bg_note": "bg 只给零墨的纹样（云气带、雪痕），即「不画」"
+ },
+ "chroma_gate": {
+  "note": "压在文字下的纹样，真正的闸门不是对比度也不是 alpha，而是合成后彩度的抬升。",
+  "rule": "纹样以 alpha 压在底色上，合成色的彩度 C 不得比底色高出 max_delta_c 以上",
+  "max_delta_c": 4.0,
+  "why": "实测水墨（底 鱼肚白 C3.7）：借 accent（银朱 C93.3）在 alpha 0.20 时合成彩度冲到 17.2（ΔC +13.5、ΔE 14.6）——那是一片可见的粉橙色晕，眼睛会把它读成第四个色块，正是「不让整体彩度负担上升」要挡的东西。同样条件下借 border 只把彩度动了 0.5。所以压文字的纹样实际只能借近无彩色（surface / border / muted），但闸门写成 ΔC 而不是 token 白名单——那样在 accent 恰好低彩的场景里也成立。",
+  "forbid_gradient_alpha": "禁止渐变 alpha（gradient mask、radial 渐隐）。WCAG 1.4.3 要求文字覆盖到的每一处背景都成立，而渐变的最坏点不可预测、无法静态核验。要浓淡变化就用分层定值 alpha。"
+ },
+ "ink_ladder": {
+  "note": "墨分五色落在 token 上。同屏两个纹样必须差一整档：远者必淡、近者必浓，绝不倒置或同浓——这是空间感的唯一来源，也是纹样不需要新色的原因。",
+  "焦浓": "text（近石、一叶舟、印边）",
+  "重": "border_strong（中景石、树干、界画线、缠枝骨架、竹竿）",
+  "淡": "border（远山、水纹、云头、冰裂、回纹、六边锦地）",
+  "清": "surface（深底方案上的提亮纹）",
+  "白": "bg（云气带、雪痕，不画）",
+  "caveat": "淡墨是同一锭墨加水，这个理由只覆盖纹样层。17 个 token 本身必须是库内实色，绝不许用 opacity 派生——混淆这两件事就是库外 hex 的入口。"
+ },
+ "alpha_ceilings": {
+  "note": "纹样压在正文下时的 alpha 上限，按借色分别给。跨 6 个场景（水墨/青花/故宫/年画/宋瓷/补服）二分实测，取最小值，保住正文对合成后底色仍 ≥4.5:1。",
+  "why_not_token_whitelist": "早先想写成『压文字只能借 surface/border』，那是按实心填充（alpha=1.0）测的。真实纹样带 opacity 0.04~0.12，在那个区间每个 token 都过 4.5:1（连 text 在 0.20 都有 7.87:1）。所以闸门在 alpha 上，不在 token 白名单上。",
+  "surface": 1.0,
+  "border": 1.0,
+  "border_strong": 0.63,
+  "muted": 0.5,
+  "secondary": 0.44,
+  "accent": 0.49,
+  "text": 0.4,
+  "practical_default": 0.08,
+  "practical_note": "实测线纹在 opacity 0.08 时 ink_pct 只有 0.08~0.71%，可读性闸门几乎永不咬人。真正该管的是噪声：底纹越密越容易显脏，不是越容易读不清。"
+ },
+ "charge_rule": {
+  "note": "彩度型借色的计费方式。",
+  "formula": "charge = ink_pct × (C_ink / C_accent)",
+  "cap": "charge ≤ 0.3 × accent_pct",
+  "why_not_one_to_one": "1:1 相减会造假失败。水墨 accent 额度只有 2.0%，一枚 opacity 0.06 的散点梅 ink_pct≈0.10%，扣掉无害；但锦地 ink_pct 1.8% 会吃掉 90% 的按钮额度，而那层 0.06 的锦地在观感上根本不是第二块红。打折加上限之后，水墨落到 charge ≤ 0.6%，正好放过线纹、挡住锦地与水墨渲染——后者必须改借中性色。",
+  "neutral_free": "中性借色（实测 C<12）零计费。按实测彩度判，不按 token 名——同一个 token 在不同场景的彩度能差一个档（水墨 border_strong 海鸥灰 C=11.8 中性，年画 猴毛灰 C=16.0 彩度）。",
+  "computed_by": "scripts/handoff.py 的 ornament() 用 ink_range 的上界实算，超过 cap 时写进 issues。在 ink_pct 数值化之前这条公式只是散文——ink_range 就是为了让它可算才加的。"
+ },
+ "sets": {
+  "四君子": {
+   "members": [
+    "mei-zhezhi",
+    "lan-congsheng",
+    "zhu-jiezhu",
+    "ju-zhezhi"
+   ],
+   "rule": "四条屏语汇，一屏一种。把四种画进同一个页面是错的。用户说「梅兰竹菊」时提醒他这是四条屏，问他要哪一种，或做成四个分页/四个区块各一种。",
+   "aliases": [
+    "梅兰竹菊",
+    "四君子",
+    "四条屏"
+   ]
+  },
+  "岁寒三友": {
+   "members": [
+    "song-zhi",
+    "zhu-jiezhu",
+    "mei-zhezhi"
+   ],
+   "rule": "三件一组。梅与竹同框而无松，会被读成残缺的岁寒三友——要么补松，要么把两者分置到不同区块。",
+   "aliases": [
+    "岁寒三友",
+    "松竹梅",
+    "松竹梅三友"
+   ]
+  },
+  "三远": {
+   "members": [
+    "gaoyuan-zhufeng",
+    "shenyuan-gukou",
+    "yuanshan-yixian"
+   ],
+   "rule": "郭熙《林泉高致》的高远/深远/平远，各有落位：高远在页眉角、深远作分节处、平远在页脚。三者可同页共存（那正是一幅山水的完整空间），但每种只许一处。",
+   "aliases": [
+    "三远",
+    "三远法",
+    "高远深远平远",
+    "高远深远与平远"
+   ]
+  }
+ },
+ "taboo": {
+  "note": "有礼制等级含义的纹样，不作普通品牌标记。这些不是迷信，是这些图形在历史上曾经承载身份，用错会让人觉得不懂。拒绝时要给替代路径，不要只说不行。",
+  "items": [
+   {
+    "what": "五爪龙",
+    "why": "元代起五爪二角龙定为天子专用，明清严格限皇帝",
+    "instead": "要龙的气质就用夔纹（无角一足的龙形前身，不涉爪数），或用卷草的抽象缠绕代替",
+    "match": [
+     "五爪龙",
+     "五爪蟒",
+     "龙纹",
+     "蟠龙",
+     "团龙",
+     "正龙",
+     "行龙"
+    ]
+   },
+   {
+    "what": "四爪龙（蟒）",
+    "why": "清制贝勒、贝子的圆补用四爪龙，文献称「巨蟒」。蟒不是「小一号的龙」——把五爪改成四爪并未规避礼制，只是换了一级",
+    "instead": "同上，走夔纹或卷草",
+    "match": [
+     "四爪龙",
+     "四爪蟒",
+     "蟒纹",
+     "巨蟒纹"
+    ]
+   },
+   {
+    "what": "龙凤对置",
+    "why": "帝后配套形制。凤作单独装饰在民间可用，但成对是另一回事",
+    "instead": "单用凤，或改用其他禽鸟",
+    "match": [
+     "龙凤呈祥",
+     "龙凤对",
+     "龙凤纹",
+     "龙凤配",
+     "龙凤双"
+    ]
+   },
+   {
+    "what": "十二章",
+    "why": "必须日月星辰山龙华虫宗彝藻火粉米黼黻十二种齐备，往下按九章/七章/五章/三章递减",
+    "instead": "任何「按等级解锁纹样数量」的设计都是在复刻章服制度——会员等第不要用纹样件数表示",
+    "match": [
+     "十二章",
+     "章服",
+     "按等级解锁纹样",
+     "按等第解锁纹样",
+     "纹样件数表示等级"
+    ]
+   },
+   {
+    "what": "补子",
+    "match": [
+     "补子",
+     "禽兽等第",
+     "官阶纹样"
+    ],
+    "why": "文官飞禽（一品仙鹤、二品锦鸡、三品孔雀…）、武官走兽（狮子、虎豹、熊罴…）是清代官阶",
+    "instead": "单用一只鹤当徽章无碍；把九种禽兽按序列排成会员等第或成就体系，就是把清代官阶搬进产品"
+   },
+   {
+    "what": "圆补与方补承担等级含义",
+    "why": "清代宗室用圆补、文武官用方补，形状本身即身份",
+    "instead": "徽章取圆或方无碍，但不要让圆/方在同一套设计里表示高低",
+    "match": [
+     "圆补子",
+     "方补子",
+     "圆补纹",
+     "方补纹"
+    ]
+   },
+   {
+    "what": "大面积填金",
+    "why": "元代庶人禁列直接列有「金黄」，与明黄三阶（皇帝明黄→皇子金黄→亲王）同源",
+    "instead": "金只走线不填面，也不作大面底纹（这条与铁律 10 一致）",
+    "match": [
+     "大面积填金",
+     "通体填金",
+     "满地填金",
+     "大面积金箔",
+     "通体贴金",
+     "大面积贴金"
+    ]
+   }
+  ],
+  "match_rule": "match 键必须是纹样语境里才会出现的词，不能是会落进普通产品话的短词。已踩过的坑：「画龙」触发于画龙点睛、「四爪」触发于四爪抓手、「圆补/方补」触发于圆补丁、「填金/满金」触发于填金色与满金币、「龙凤」触发于龙凤胎。selftest 用一份无害语料回归这条：语料里任何一句触发禁忌就算失败。"
+ },
+ "motifs": [
+  {
+   "id": "mei-zhezhi",
+   "name": "折枝梅",
+   "category": "flora",
+   "season": "冬末早春",
+   "season_rigidity": "mid",
+   "form": "折枝",
+   "form_detail": "截断的一段梅枝斜入，先花后叶，花必五瓣，枝作顿折的硬转，不带根土",
+   "borrows_token": [
+    "border_strong",
+    "text",
+    "accent"
+   ],
+   "under_text": false,
+   "coverage_pct": "8-12",
+   "ink_pct": "0.8-1.8",
+   "ink_range": [
+    0.8,
+    1.8
+   ],
+   "placement": "版心一角（左上或右下），可被视口裁切；卡片页眉一角",
+   "css_hint": "width: clamp(180px, 22vw, 340px)",
+   "fits_scenes": [
+    "水墨",
+    "宋瓷",
+    "江南",
+    "青花"
+   ],
+   "avoid_scenes": [
+    "敦煌",
+    "唐三彩"
+   ],
+   "culture_note": "全套里最安全的吉祥花，几乎无禁忌。唯一一条：与竹同框会被读成缺松的岁寒三友。",
+   "pairs_with": [
+    "四君子",
+    "岁寒三友"
+   ],
+   "aliases": [
+    "梅花",
+    "折枝梅",
+    "一枝梅",
+    "梅枝",
+    "腊梅",
+    "梅开五福"
+   ]
+  },
+  {
+   "id": "mei-xiechu",
+   "name": "一枝斜出梅",
+   "category": "flora",
+   "season": "冬末早春",
+   "season_rigidity": "mid",
+   "form": "一枝斜出",
+   "form_detail": "单枝自版面一侧长驱斜贯，大部分留白，即「疏影横斜」",
+   "borrows_token": [
+    "border",
+    "border_strong"
+   ],
+   "under_text": true,
+   "coverage_pct": "30-45",
+   "ink_pct": "2-4",
+   "ink_range": [
+    2.0,
+    4.0
+   ],
+   "placement": "首屏大背景层，压在 bg 之上、内容之下",
+   "css_hint": "position:absolute; inset:0; opacity 需盯住",
+   "fits_scenes": [
+    "水墨",
+    "宋瓷"
+   ],
+   "avoid_scenes": [
+    "年画",
+    "敦煌",
+    "唐三彩",
+    "漆器"
+   ],
+   "culture_note": "占版大时最容易越过墨量预算，是本表里最需要盯 opacity 的一条。",
+   "pairs_with": [
+    "岁寒三友"
+   ],
+   "aliases": [
+    "疏影横斜",
+    "斜枝梅",
+    "大枝梅"
+   ]
+  },
+  {
+   "id": "lan-congsheng",
+   "name": "丛兰",
+   "category": "flora",
+   "season": "春",
+   "season_rigidity": "none",
+   "form": "丛生",
+   "form_detail": "自地面成丛而起，叶取「一笔长、二笔短、三笔破」的交错撇法，花藏叶间，重心偏一侧",
+   "borrows_token": [
+    "border_strong",
+    "muted",
+    "text"
+   ],
+   "under_text": false,
+   "coverage_pct": "6-10",
+   "ink_pct": "1-2",
+   "ink_range": [
+    1.0,
+    2.0
+   ],
+   "placement": "页面底缘或分区下沿，横向贴底；也可作 footer 上边的收束",
+   "css_hint": "height: clamp(80px, 10vh, 140px); width: 100%",
+   "fits_scenes": [
+    "水墨",
+    "宋瓷",
+    "江南"
+   ],
+   "avoid_scenes": [
+    "年画",
+    "唐三彩",
+    "漆器"
+   ],
+   "culture_note": "无丧仪风险。作君子符号时基本读作无时令。兰过于素净，放进响亮档位会被色板压得看不见。",
+   "pairs_with": [
+    "四君子"
+   ],
+   "aliases": [
+    "兰花",
+    "丛兰",
+    "幽兰",
+    "兰草"
+   ]
+  },
+  {
+   "id": "lan-xiaocong",
+   "name": "兰叶小丛",
+   "category": "flora",
+   "season": "春",
+   "season_rigidity": "none",
+   "form": "丛生（极简裁剪）",
+   "form_detail": "三五笔叶，无花",
+   "borrows_token": [
+    "border_strong",
+    "muted"
+   ],
+   "under_text": false,
+   "coverage_pct": "1-2",
+   "ink_pct": "0.3-0.5",
+   "ink_range": [
+    0.3,
+    0.5
+   ],
+   "placement": "标题左侧或 h2 之前的小标记；也可作列表项符号",
+   "css_hint": "width: 40-64px; inline-block",
+   "fits_scenes": [
+    "水墨",
+    "宋瓷",
+    "江南",
+    "青花"
+   ],
+   "avoid_scenes": [],
+   "culture_note": "",
+   "pairs_with": [
+    "四君子"
+   ],
+   "aliases": [
+    "兰叶",
+    "小兰叶",
+    "标题兰"
+   ]
+  },
+  {
+   "id": "zhu-jiezhu",
+   "name": "竹节竖列",
+   "category": "flora",
+   "season": "四季",
+   "season_rigidity": "none",
+   "form": "丛生（竖向裁剪）",
+   "form_detail": "两三竿竹节自上贯下，节与节之间留断，叶取「个」字与「介」字排布",
+   "borrows_token": [
+    "border_strong",
+    "secondary",
+    "text"
+   ],
+   "under_text": false,
+   "coverage_pct": "4-8",
+   "ink_pct": "0.8-2",
+   "ink_range": [
+    0.8,
+    2.0
+   ],
+   "placement": "侧边栏、分栏之间的竖向装饰带、页面左右外留白",
+   "css_hint": "width: clamp(28px, 4vw, 56px); height: 100%",
+   "fits_scenes": [
+    "水墨",
+    "宋瓷",
+    "江南",
+    "青花"
+   ],
+   "avoid_scenes": [],
+   "culture_note": "全套唯一零季节风险的一条，四季常青。中国语境里竹与丧仪无关联。",
+   "pairs_with": [
+    "四君子",
+    "岁寒三友"
+   ],
+   "aliases": [
+    "竹子",
+    "竹节",
+    "竹影",
+    "翠竹",
+    "竹报平安"
+   ]
+  },
+  {
+   "id": "zhu-zhezhi",
+   "name": "折枝竹叶",
+   "category": "flora",
+   "season": "四季",
+   "season_rigidity": "none",
+   "form": "折枝",
+   "form_detail": "一段带叶的竹枝斜入，不画竿根",
+   "borrows_token": [
+    "border_strong",
+    "text"
+   ],
+   "under_text": false,
+   "coverage_pct": "6-10",
+   "ink_pct": "1-2",
+   "ink_range": [
+    1.0,
+    2.0
+   ],
+   "placement": "版心一角；表格或卡片的右下角收尾",
+   "css_hint": "width: clamp(140px, 18vw, 260px)",
+   "fits_scenes": [
+    "水墨",
+    "宋瓷",
+    "江南"
+   ],
+   "avoid_scenes": [],
+   "culture_note": "与梅同框等于残缺的岁寒三友，要么补松，要么分置不同区块。",
+   "pairs_with": [
+    "四君子",
+    "岁寒三友"
+   ],
+   "aliases": [
+    "竹叶",
+    "折枝竹"
+   ]
+  },
+  {
+   "id": "ju-zhezhi",
+   "name": "折枝菊",
+   "category": "flora",
+   "season": "秋",
+   "season_rigidity": "high",
+   "form": "折枝",
+   "form_detail": "一枝带一两朵盛开与一枚半开的花头，瓣作层叠的抱心或散射，偏心构图",
+   "borrows_token": [
+    "border_strong",
+    "accent",
+    "text"
+   ],
+   "under_text": false,
+   "coverage_pct": "6-10",
+   "ink_pct": "1-2",
+   "ink_range": [
+    1.0,
+    2.0
+   ],
+   "placement": "版心一角；秋季活动页的页眉一侧",
+   "css_hint": "width: clamp(150px, 18vw, 280px)",
+   "fits_scenes": [
+    "水墨",
+    "宋瓷",
+    "江南",
+    "唐三彩"
+   ],
+   "avoid_scenes": [],
+   "culture_note": "风险在画法与形制，不在这朵花。水墨折枝菊是文人清供，安全；写实白菊花束、花圈、单支白菊居中献花是丧仪构图，避开。正十六瓣放射对称的团菊是日本皇室纹章形状，中国品牌改走折枝或偏心丛生。面向日本市场时整体风险高于中国语境。",
+   "pairs_with": [
+    "四君子"
+   ],
+   "aliases": [
+    "菊花",
+    "折枝菊",
+    "秋菊",
+    "重阳菊"
+   ]
+  },
+  {
+   "id": "he-fuye",
+   "name": "水面浮叶",
+   "category": "flora",
+   "season": "夏",
+   "season_rigidity": "high",
+   "form": "水面浮叶",
+   "form_detail": "荷叶平铺水面，叶缘起伏，叶脉自中心放射，间以一枝挺出的花或莲蓬，整体是横向的水平层",
+   "borrows_token": [
+    "border",
+    "border_strong",
+    "secondary"
+   ],
+   "under_text": false,
+   "coverage_pct": "8-14",
+   "ink_pct": "1-2.5",
+   "ink_range": [
+    1.0,
+    2.5
+   ],
+   "placement": "页脚上缘、分区之间的横向断带；横向铺满、纵向极薄",
+   "css_hint": "height: clamp(90px, 12vh, 180px); width: 100%",
+   "fits_scenes": [
+    "水墨",
+    "宋瓷",
+    "江南"
+   ],
+   "avoid_scenes": [
+    "年画"
+   ],
+   "culture_note": "季节最刚性的一条——冬季或岁末页面画荷立刻被识破。另：单朵白莲配烛火漂于水面是中元河灯/追思构图，避开。缠枝莲那一路的装饰语域完全世俗，无此问题。",
+   "pairs_with": [],
+   "aliases": [
+    "荷花",
+    "莲花",
+    "荷叶",
+    "荷塘",
+    "莲蓬"
+   ]
+  },
+  {
+   "id": "chanzhi-lian",
+   "name": "缠枝莲",
+   "category": "geometric",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "缠枝（二方连续）",
+   "form_detail": "藤蔓作连续 S 形波状延展，花头依次生于波峰波谷，首尾可无限接续",
+   "borrows_token": [
+    "border",
+    "border_strong"
+   ],
+   "under_text": false,
+   "coverage_pct": "2-4",
+   "ink_pct": "0.5-1.2",
+   "ink_range": [
+    0.5,
+    1.2
+   ],
+   "placement": "分割线、区块上下边饰、卡片外框、表格页眉带",
+   "css_hint": "height: 24-40px; background-repeat: repeat-x",
+   "fits_scenes": [
+    "青花",
+    "故宫",
+    "宋瓷",
+    "漆器",
+    "王府"
+   ],
+   "avoid_scenes": [],
+   "culture_note": "《爱莲说》原文「不蔓不枝」恰恰反对缠绕的莲——缠枝莲是工艺变体，不是那朵君子之莲，讲典故时两者别混。用在青花场景时不得因纹样再引入第三色（青花只有青与白）。",
+   "pairs_with": [],
+   "aliases": [
+    "缠枝莲",
+    "缠枝纹",
+    "卷草莲"
+   ]
+  },
+  {
+   "id": "yuanshan-yixian",
+   "name": "远山一线",
+   "category": "landscape",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "平远",
+   "form_detail": "一条低平、左右不对称的山脊轮廓线，只有一个主峰且峰位偏在三分之一处，其余起伏不等高不等距，开口不闭合、两端淡出。绝不做成正弦或对称双峰——那就成了装饰性波浪。",
+   "borrows_token": [
+    "border"
+   ],
+   "under_text": false,
+   "coverage_pct": "横贯全宽，纵向极薄",
+   "ink_pct": "≤0.4",
+   "ink_range": [
+    0.0,
+    0.4
+   ],
+   "placement": "页脚上方，或内容区与 footer 之间的过渡带。这是「平远」的位置",
+   "css_hint": "width:100%; opacity:.08~.14; stroke-width:0.75~1px",
+   "fits_scenes": [
+    "水墨",
+    "宋瓷",
+    "江南",
+    "祭天"
+   ],
+   "avoid_scenes": [
+    "年画",
+    "唐三彩"
+   ],
+   "culture_note": "一版只许一条。多画即成插画，不再是点缀。",
+   "pairs_with": [
+    "三远"
+   ],
+   "aliases": [
+    "远山",
+    "远山一线",
+    "山廓",
+    "山影",
+    "群山"
+   ]
+  },
+  {
+   "id": "gaoyuan-zhufeng",
+   "name": "高远主峰一角",
+   "category": "landscape",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "高远",
+   "form_detail": "一座被版面边缘裁掉大半的山体侧廓，仰视、上宽下窄、顶端出画；内侧配三到五笔皴（江南系用披麻，宫廷系用斧劈），笔不等长、不平行",
+   "borrows_token": [
+    "border_strong",
+    "border"
+   ],
+   "under_text": false,
+   "coverage_pct": "外接框 ≤ 版面短边 1/4",
+   "ink_pct": "≤1.5",
+   "ink_range": [
+    0.0,
+    1.5
+   ],
+   "ink_note": "框内着墨可到 8%，框外零墨；此处 1.5 是折算到整版之后的数",
+   "placement": "页眉或 hero 的左上/右上单角，压在标题之外的空处。这是「高远」的位置",
+   "css_hint": "轮廓 opacity:.16~.24；皴笔 opacity:.10~.16",
+   "fits_scenes": [
+    "水墨",
+    "宋瓷",
+    "敦煌",
+    "江南"
+   ],
+   "avoid_scenes": [
+    "年画"
+   ],
+   "culture_note": "",
+   "pairs_with": [
+    "三远"
+   ],
+   "aliases": [
+    "主峰",
+    "高远",
+    "山峰一角",
+    "峰峦"
+   ]
+  },
+  {
+   "id": "shenyuan-gukou",
+   "name": "深远谷口",
+   "category": "landscape",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "深远",
+   "form_detail": "两道轮廓边前后叠压，中间留出一条不画的缝；后面那道更淡更高更短，前面那道更浓更低更长。主体是那条缝，不是线",
+   "borrows_token": [
+    "border_strong",
+    "border"
+   ],
+   "under_text": false,
+   "coverage_pct": "两条线，缝宽不小于线宽的 6 倍",
+   "ink_pct": "≤0.3",
+   "ink_range": [
+    0.0,
+    0.3
+   ],
+   "placement": "分节处、两个区块之间，替代 hr；或长页面中段的转折。这是「深远」的位置",
+   "css_hint": "近边 opacity:.20~.28；远边 opacity:.08~.12；缝隙用 bg 不画",
+   "fits_scenes": [
+    "水墨",
+    "宋瓷",
+    "江南"
+   ],
+   "avoid_scenes": [
+    "年画",
+    "唐三彩"
+   ],
+   "culture_note": "",
+   "pairs_with": [
+    "三远"
+   ],
+   "aliases": [
+    "谷口",
+    "深远",
+    "两山夹一隙",
+    "山隙"
+   ]
+  },
+  {
+   "id": "shuiwen-yijiao",
+   "name": "一角水纹",
+   "category": "landscape",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "鱼鳞式叠弧",
+   "form_detail": "三到七道同心不等长的短弧，越外越淡越短，弧心偏在角上，弧与弧间距不等。不闭合、不成带、不铺满——水面本身不画",
+   "borrows_token": [
+    "border"
+   ],
+   "under_text": false,
+   "coverage_pct": "外接框 ≤ 版面短边 1/6",
+   "ink_pct": "≤0.2",
+   "ink_range": [
+    0.0,
+    0.2
+   ],
+   "placement": "卡片或版面的单个下角（马一角的位置）；或表单、引文块的左下",
+   "css_hint": "opacity:.10~.16；最外一两道可降到 .08",
+   "fits_scenes": [
+    "水墨",
+    "宋瓷",
+    "江南",
+    "青花",
+    "祭天"
+   ],
+   "avoid_scenes": [
+    "年画"
+   ],
+   "culture_note": "",
+   "pairs_with": [],
+   "aliases": [
+    "水纹",
+    "水波",
+    "涟漪",
+    "叠弧",
+    "一角水"
+   ]
+  },
+  {
+   "id": "huiwen",
+   "name": "回纹",
+   "category": "geometric",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "二方连续",
+   "form_detail": "方折回旋的连续线，转角皆 90°。属云雷纹范畴（云纹圆弧、雷纹方折）",
+   "borrows_token": [
+    "border",
+    "border_strong"
+   ],
+   "under_text": false,
+   "coverage_pct": "10-15",
+   "ink_pct": "0.5-1.5",
+   "ink_range": [
+    0.5,
+    1.5
+   ],
+   "placement": "页眉带、页脚带、分隔线、表头下沿、卡片顶饰、hr 替代",
+   "css_hint": "正文区 alpha .05~.08；纯装饰带可到 .15；background-repeat: repeat-x",
+   "fits_scenes": [
+    "故宫",
+    "青花",
+    "漆器",
+    "王府",
+    "补服",
+    "唐三彩",
+    "敦煌"
+   ],
+   "avoid_scenes": [],
+   "culture_note": "最安全的边框纹，优先选它。无礼制含义。",
+   "pairs_with": [],
+   "aliases": [
+    "回纹",
+    "雷纹",
+    "回字纹",
+    "边框纹"
+   ]
+  },
+  {
+   "id": "wanzi-wen",
+   "name": "万字纹",
+   "category": "geometric",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "四方连续",
+   "form_detail": "多个卐字勾连成网，可正放也可 45° 斜放。别名万字锦、万字拐、万不断、万字曲水",
+   "borrows_token": [
+    "border",
+    "surface"
+   ],
+   "under_text": true,
+   "coverage_pct": "8-12",
+   "ink_pct": "0.5-0.8",
+   "ink_range": [
+    0.5,
+    0.8
+   ],
+   "placement": "通铺底纹、侧栏底、卡片底；也可作花边",
+   "css_hint": "正文区 alpha ≤.06；建议 45° 斜置——传统本就允许，且能避开与文字基线平行",
+   "fits_scenes": [
+    "故宫",
+    "漆器",
+    "王府",
+    "补服",
+    "年画"
+   ],
+   "avoid_scenes": [],
+   "culture_note": "取「万事不断」的绵长意，是世俗吉祥纹，无等级含义。",
+   "pairs_with": [],
+   "aliases": [
+    "万字纹",
+    "万字锦",
+    "万不断",
+    "万字曲水"
+   ]
+  },
+  {
+   "id": "binglie-wen",
+   "name": "冰裂纹",
+   "category": "geometric",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "四方连续（非周期）",
+   "form_detail": "疏朗的裂纹网，线要疏、要长、交点要少。哥窑开片，成因是釉层收缩大于胎体",
+   "borrows_token": [
+    "border",
+    "surface"
+   ],
+   "under_text": true,
+   "coverage_pct": "3-6",
+   "ink_pct": "0.2-0.5",
+   "ink_range": [
+    0.2,
+    0.5
+   ],
+   "placement": "通铺极淡底纹、卡片底、图片占位、空状态底",
+   "css_hint": "alpha ≤.06；比几何锦地更低",
+   "fits_scenes": [
+    "宋瓷",
+    "青花",
+    "水墨",
+    "江南"
+   ],
+   "avoid_scenes": [
+    "年画",
+    "唐三彩"
+   ],
+   "culture_note": "《长物志》评开片「冰裂为上，细碎纹最下」——传统审美与可读性在这里恰好同向：越疏越美，也越不糊字。",
+   "pairs_with": [],
+   "aliases": [
+    "冰裂纹",
+    "开片",
+    "冰裂",
+    "裂纹"
+   ]
+  },
+  {
+   "id": "guibei-wen",
+   "name": "龟背纹",
+   "category": "geometric",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "四方连续",
+   "form_detail": "正六边形密铺，标准锦地之一",
+   "borrows_token": [
+    "surface",
+    "border"
+   ],
+   "under_text": true,
+   "coverage_pct": "6-10",
+   "ink_pct": "0.3-0.6",
+   "ink_range": [
+    0.3,
+    0.6
+   ],
+   "placement": "通铺底纹、开光之外的地、页脚",
+   "css_hint": "alpha ≤.05",
+   "fits_scenes": [
+    "故宫",
+    "漆器",
+    "王府",
+    "补服"
+   ],
+   "avoid_scenes": [],
+   "culture_note": "六边形是最规整的锦地，因而极易被看成表格线或网格布局，务必压到看不出边界。",
+   "pairs_with": [],
+   "aliases": [
+    "龟背纹",
+    "六边锦",
+    "龟甲纹"
+   ]
+  },
+  {
+   "id": "jindi-kaiguang",
+   "name": "锦地开光",
+   "category": "geometric",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "适合纹样",
+   "form_detail": "满地纹样上留出素白开窗写字。地是锦（云雷、龟背、几何皆可），窗是素",
+   "borrows_token": [
+    "surface",
+    "border"
+   ],
+   "under_text": false,
+   "coverage_pct": "地可到 15-20，窗内为 0",
+   "ink_pct": "1-3",
+   "ink_range": [
+    1.0,
+    3.0
+   ],
+   "ink_note": "仅锦地部分，开光素窗内零墨",
+   "placement": "整块区域作地，正文与标题落在开光的素窗里",
+   "css_hint": "地 alpha ≤.06；窗用纯 bg，窗边可加一道 border 细线",
+   "fits_scenes": [
+    "故宫",
+    "青花",
+    "漆器",
+    "王府",
+    "唐三彩"
+   ],
+   "avoid_scenes": [
+    "水墨"
+   ],
+   "culture_note": "这是「纹样不能压过文字」的传统解法，也是本表里唯一允许高覆盖率的构成——因为它把可读性交给了版式而不是交给透明度。密纹想上 15% 以上覆盖，必须配开光；不留素地就必然糊字。",
+   "pairs_with": [],
+   "aliases": [
+    "锦地开光",
+    "开光",
+    "开窗",
+    "锦地"
+   ]
+  },
+  {
+   "id": "yuntou-ruyi",
+   "name": "如意云头",
+   "category": "geometric",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "单独纹样",
+   "form_detail": "单枚如意式云头：一个卷心加两侧对称的钩，尾部拖一道短尾即止。发丝级线，不填色",
+   "borrows_token": [
+    "border_strong",
+    "surface"
+   ],
+   "under_text": false,
+   "coverage_pct": "直径 ≤ 2 倍标题字高",
+   "ink_pct": "≤0.05",
+   "ink_range": [
+    0.0,
+    0.05
+   ],
+   "placement": "章节标题起处、卡片右上角、或按钮组之外的一个空角。一版一枚",
+   "css_hint": "opacity:.18~.24；深底上改借 surface",
+   "fits_scenes": [
+    "故宫",
+    "青花",
+    "漆器",
+    "王府",
+    "补服",
+    "宋瓷"
+   ],
+   "avoid_scenes": [],
+   "culture_note": "",
+   "pairs_with": [],
+   "aliases": [
+    "云头",
+    "如意云头",
+    "如意纹",
+    "祥云"
+   ]
+  },
+  {
+   "id": "yunqi-dai",
+   "name": "云气带",
+   "category": "landscape",
+   "season": "无季",
+   "season_rigidity": "none",
+   "form": "留白成形",
+   "form_detail": "一条不画的横向空带，把上下两处墨迹隔开。带的形状由上下两侧的墨边界反向定义，边界不平行、一端收窄。着墨为零",
+   "borrows_token": [
+    "bg"
+   ],
+   "under_text": false,
+   "coverage_pct": "带高不小于正文行高的 3 倍，否则读成行距",
+   "ink_pct": "0",
+   "ink_range": [
+    0.0,
+    0.0
+   ],
+   "placement": "远山与近景之间、两个内容区之间、hero 与正文之间",
+   "css_hint": "完全不画；上下两侧边界借 border 与 border_strong",
+   "fits_scenes": [
+    "水墨",
+    "宋瓷",
+    "江南",
+    "祭天"
+   ],
+   "avoid_scenes": [],
+   "culture_note": "着墨为零的纹样，是「点缀而非配比色」的最纯形态——它不可能变成第四色。留白在中国画里是构成元素而不是背景，这一条把那个观念直接落成了可执行的东西。",
+   "pairs_with": [],
+   "aliases": [
+    "云气",
+    "留白带",
+    "云气带",
+    "空带"
+   ]
+  },
+  {
+   "id": "zhushi-yijiao",
+   "name": "竹石一角",
+   "category": "landscape",
+   "season": "四季",
+   "season_rigidity": "none",
+   "form": "折枝加石",
+   "form_detail": "两三竿竹（一竿主、余为衬，节距不等）加一块矮石作根；叶片五到九片，方向不匀。竹竿只勾两侧线，中空不填",
+   "borrows_token": [
+    "border_strong",
+    "text",
+    "border"
+   ],
+   "under_text": false,
+   "coverage_pct": "外接框 ≤ 版面短边 1/4",
+   "ink_pct": "≤0.8",
+   "ink_range": [
+    0.0,
+    0.8
+   ],
+   "placement": "侧栏底部、卡片左下；interior 里可放大到整面墙脚（媒材放大时数量不变、比例变）",
+   "css_hint": "竿与叶 opacity:.20~.28；石 opacity:.30~.40 配 3~5 笔皴",
+   "fits_scenes": [
+    "水墨",
+    "宋瓷",
+    "江南"
+   ],
+   "avoid_scenes": [
+    "年画",
+    "唐三彩"
+   ],
+   "culture_note": "",
+   "pairs_with": [
+    "四君子",
+    "岁寒三友"
+   ],
+   "aliases": [
+    "竹石",
+    "竹石一角",
+    "石头配竹"
+   ]
+  },
+  {
+   "id": "song-zhi",
+   "name": "松枝",
+   "category": "flora",
+   "season": "四季",
+   "season_rigidity": "none",
+   "form": "折枝",
+   "form_detail": "一段松枝，针叶成束放射，枝干作鳞裂的老态",
+   "borrows_token": [
+    "border_strong",
+    "text",
+    "secondary"
+   ],
+   "under_text": false,
+   "coverage_pct": "6-12",
+   "ink_pct": "1-2.5",
+   "ink_range": [
+    1.0,
+    2.5
+   ],
+   "placement": "版心一角；也可与山石同置作页脚",
+   "css_hint": "width: clamp(160px, 20vw, 300px)",
+   "fits_scenes": [
+    "水墨",
+    "宋瓷",
+    "江南",
+    "祭天"
+   ],
+   "avoid_scenes": [
+    "年画"
+   ],
+   "culture_note": "长寿。补齐岁寒三友的那一件——有梅有竹时加松，构图就完整了。",
+   "pairs_with": [
+    "岁寒三友"
+   ],
+   "aliases": [
+    "松枝",
+    "松针",
+    "古松",
+    "松树"
+   ]
+  }
+ ]
+}

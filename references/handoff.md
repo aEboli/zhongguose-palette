@@ -26,11 +26,44 @@ python scripts/palette.py pick "鱼肚白+战舰灰+银朱" --scene 水墨 --med
 
 | 技能 | 读 | 明确不读 |
 | --- | --- | --- |
-| frontend-design | `meta` `named6` `roles` `cliche` `bans` | `tokens_*` `chart` |
+| frontend-design | `meta` `named6` `roles` `ornament` `cliche` `bans` | `tokens_*` `chart` |
 | artifact-design | `css.light` `css.dark` `tokens_light` `tokens_dark` `bans` | `chart` `named6` |
 | dataviz | `chart` `tokens_light.bg/text/border` `bans` | `named6` `roles` |
 
 只读自己那段，避免上下文膨胀。
+
+## ornament：纹样点缀怎么消费
+
+`--motif` 选了纹样时，`handoff.json` 多一段 `ornament`。它给的是**借哪个变量**，
+不是 hex——纹样资产里一个色值字符都没有。
+
+| 字段 | 是什么 |
+| --- | --- |
+| `chosen[]` | 选中的纹样。每条给 `borrows_var`（CSS 变量名）、`borrows_alternates`（备选变量）、`placement`（落位）、`css_hint`（尺寸）、`alpha_suggested` / `alpha_max`、`ink_pct` + `ink_range` + `ink_note`（墨量）、`charge`（计费明细） |
+| `suggestions[]` | 这个场景适配的纹样 id。按纹样自己的 `fits_scenes` 算，不是「没被排除」 |
+| `issues[]` | 不合规的地方：借了白名单外的 token、彩度抬升超闸门、alpha 超上限、场景气质不合、计费超额。**必须向用户明说，不许静默交付** |
+| `render` | 渲染形态。`preferred: mask`，`must_not` 列出禁止的三种写法 |
+| `ink_sources.allowed` | 合法借色源只有 8 个。交互态（`accent_hover` 等）、语义徽章（`success` 等）、失能态、焦点环一律不许借——那等于把状态语义泄进装饰层 |
+| `chroma_gate` | 压在正文下时合成彩度的抬升上限。实测借高彩 accent 会冲到 +13.5，那是一片可见色晕 |
+| `alpha_ceilings` | 各 token 作纹样底时的 alpha 上限。看的是合成后正文还剩多少对比，不是看借了哪个 token |
+| `budget` | 墨量与铺色面积是两套账。`charge` 给折价公式与上限，`accent_pct` 给点缀额度 |
+| `sets` / `taboo` | 成套语汇（四君子一屏一种）与礼制等第（五爪龙、十二章、补子）。拒绝要给替代路径 |
+
+三条硬的：
+
+1. **只许 mask 或 inline SVG。** 禁用 `background-image: url()` 承载有色纹样——
+   url() 让 SVG 成为外部资源，`currentColor` 与 `var()` 在里面一律失效，想换色只能改那串 hex。
+2. **裸 `var()` 写在 SVG 呈现属性上会静默降级且方向相反**：`fill` 回落成纯黑
+   （破「不许纯黑」），`stroke` 回落成 `none`（纹样凭空消失）。必须带 fallback：
+   `stroke="var(--color-border, currentColor)"`。
+3. **纹样是装饰**，`aria-hidden="true" focusable="false"`。若它承载了信息
+   （用图案区分类别），那它就不是装饰，必须另给文字或 `aria-label`。
+
+计费的判据是**实测彩度 C≥12**，不是 token 名。年画的 surface 是荔肉白 C=13.2、
+border 是菊蕾白 C=20.8，都在彩度档要计费；水墨的 accent 是银灰 C=10.8，反倒零计费。
+把 `surface` / `border` 当成「中性」的同义词只在素净场景里偶然成立。
+
+细则读 `references/motifs.md`。
 
 ## named6 为什么必须占满六槽
 

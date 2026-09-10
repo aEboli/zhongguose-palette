@@ -61,3 +61,35 @@
 {"say": "要五个色", "expect": {}, "why": "不该扩成等权五色板，应给三色加派生令牌"}
 {"say": "给我 CSS 变量", "expect": {}, "why": "交付形式请求，不改配色方向"}
 {"say": "这套能用在图表上吗", "expect": {}, "why": "图表要走 chart 段，不是把三色当填充"}
+{"say": "茶室的网站，加一枝梅花点缀", "expect": {"media": "ui"}, "motif": "mei-zhezhi", "why": "纹样与配色是两条轴，同时命中；梅花 与 一枝梅 都要标记，否则残渣「加枝」被报成没接住", "no_unheard": true}
+{"say": "页脚来一条远山", "expect": {}, "motif": "yuanshan-yixian", "why": "风景类纹样"}
+{"say": "荷花", "expect": {}, "motif": "he-fuye", "why": "单个纹样词也要认出来，不能报没接住"}
+{"say": "来点竹子", "expect": {}, "motif": "zhu-jiezhu", "why": "竹零季节风险"}
+{"say": "青花瓷网站，加缠枝莲", "expect": {"scene": "青花"}, "motif": "chanzhi-lian", "why": "缠枝莲是纹样不是花卉写生"}
+{"say": "岁末的活动页，加点荷花", "expect": {}, "motif_note_contains": "夏", "why": "季节冲突要明说"}
+{"say": "秋天的茶叶海报，加折枝菊", "expect": {}, "motif": "ju-zhezhi", "why": "菊属秋，季节相合不报冲突"}
+{"say": "梅花配竹子的页面", "expect": {}, "motif_note_contains": "岁寒三友", "why": "梅配竹而无松是残缺的套"}
+{"say": "梅兰竹菊的四条屏", "expect": {}, "motif_note_contains": "四条屏", "why": "点名成套要提醒它是四条屏语汇"}
+{"say": "想用五爪龙做 logo", "expect": {}, "motif_note_contains": "改法", "why": "礼制纹样要挡住并给替代"}
+{"say": "会员等级用补子的禽兽", "expect": {}, "motif_note_contains": "官阶", "why": "把官阶搬进产品"}
+{"say": "龙凤呈祥的婚礼请柬", "expect": {}, "motif_note_contains": "帝后", "why": "龙凤对置是帝后形制"}
+{"say": "卡片角上加个如意云头", "expect": {}, "motif": "yuntou-ruyi", "why": "几何类单独纹样"}
+{"say": "底纹用冰裂纹", "expect": {}, "motif": "binglie-wen", "why": "可压文字的低覆盖底纹"}
+{"say": "页眉带用回纹", "expect": {}, "motif": "huiwen", "why": "最安全的边框纹"}
+{"say": "用荷花白做底色的网站", "expect": {"seed": "荷花白"}, "no_motif": true, "no_motif_note": true, "why": "荷花白是色名，荷花 被它整段盖住——不该凭空多一枝荷"}
+{"say": "岁末活动页，主色用荷花白", "expect": {"seed": "荷花白"}, "no_motif": true, "no_motif_note": true, "why": "撞名叠上季节会倒过来训话说季节错，而用户根本没提荷花"}
+{"say": "荷叶绿的电商页", "expect": {"seed": "荷叶绿"}, "no_motif": true, "why": "荷叶 ⊂ 荷叶绿"}
+{"say": "远山紫做主色的海报", "expect": {"seed": "远山紫"}, "no_motif": true, "why": "远山 ⊂ 远山紫"}
+{"say": "金莲花橙的活动页", "expect": {"seed": "金莲花橙"}, "no_motif": true, "why": "莲花 ⊂ 金莲花橙"}
+{"say": "页面上加一点荷花", "expect": {}, "motif": "he-fuye", "why": "色名之外单说别名仍要命中，遮蔽不能做过头"}
+{"say": "画龙点睛的落地页", "expect": {}, "no_motif_note": true, "why": "画龙 曾触发五爪龙训话——match 键要锚在纹样语境里"}
+{"say": "三友咖啡的网站", "expect": {}, "no_motif_note": true, "why": "三友 曾触发岁寒三友成套训话"}
+{"say": "会员按等级解锁功能的后台", "expect": {}, "no_motif_note": true, "why": "按等级解锁 曾触发十二章训话；只有明说解锁纹样才算"}
+{"say": "圆补丁风格的卡片", "expect": {}, "no_motif_note": true, "why": "圆补 曾触发补子形制训话"}
+{"say": "填金色的按钮", "expect": {}, "no_motif_note": true, "why": "填金 曾触发大面积填金训话"}
+{"say": "龙凤胎母婴用品店", "expect": {}, "no_motif_note": true, "why": "龙凤 曾触发帝后配套训话"}
+{"say": "大面积填金的封面", "expect": {}, "motif_note_contains": "金只走线", "why": "锚定后的键仍要拦住真请求"}
+{"say": "十二章纹的博物馆页", "expect": {}, "motif_note_contains": "章服制度", "why": "十二章纹 是明确的纹样语境"}
+{"say": "盛夏的活动页，加一枝梅花", "expect": {}, "motif": "mei-zhezhi", "motif_note_contains": "季节没对上", "why": "mid 档要软说；与 none 同路等于那一档白填"}
+{"say": "春天的海报，加折枝菊", "expect": {}, "motif_note_contains": "最容易被看出来", "why": "high 档要硬说"}
+{"say": "年画风格的活动页，加点荷花", "expect": {"scene": "年画"}, "motif_note_contains": "气质不合", "no_unheard": true, "why": "已解释过被挡的原因，再报一次没接住是同一矛盾换了方向"}

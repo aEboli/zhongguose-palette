@@ -44,6 +44,7 @@ $ python scripts/palette.py ask "茶叶小店的网站，安静一点"
   - [命令总表](#命令总表)
 - [能用在 UI/UX 吗](#能用在-uiux-吗)
 - [和其他设计技能配合](#和其他设计技能配合)
+- [纹样点缀](#纹样点缀)
 - [图表用色](#图表用色)
 - [当 Python 库用](#当-python-库用)
 - [创建思路](#创建思路)
@@ -64,7 +65,7 @@ $ python scripts/palette.py ask "茶叶小店的网站，安静一点"
 | 三色等权 | 主次点缀一样响，像广告布 | 按响度派角色，铺满的那层强制安静 |
 | 面积当比例 | 把高彩点缀真铺成一整条色带 | 按感知能量反推建议铺色面积，点缀通常只有 2~5% |
 | 文化错配 | 「石青」给成薄荷绿、故宫配色出现品红 | 144 条别名做文化校正，场景限定色相窗口 |
-| 要先学术语 | 得先知道「故宫 / 青花 / 雅 / 空灵」才能开口 | `ask` 吃一句人话，535 条线索词 + 63 条回归用例兜住 |
+| 要先学术语 | 得先知道「故宫 / 青花 / 雅 / 空灵」才能开口 | `ask` 吃一句人话，567 条线索词 + 95 条回归用例兜住 |
 
 具体能力：
 
@@ -74,8 +75,9 @@ $ python scripts/palette.py ask "茶叶小店的网站，安静一点"
 - **20 套手选方案**：经过文化校对，与算法方案同场评分排序
 - **暗色模式**：深底做场，不是把浅色方案整页反相
 - **别名解析**：石青、玄色、胭脂、竹青、天青、黛、漆黑、墨色、中国红…告诉你库内对应哪一色
+- **22 个纹样点缀**：梅兰竹菊莲、远山水纹、回纹冰裂锦地——借已有颜色画，不占配比
 - **交接合同**：一条命令产出 `handoff.json` + `palette.css`，供其他设计技能读
-- **711 项回归测试**：色彩数学、色库完整性、白话映射、术语泄露、对比度闸门
+- **1484 项回归测试**：色彩数学、色库完整性、白话映射、术语泄露、对比度闸门
 
 ---
 
@@ -210,7 +212,11 @@ python scripts/palette.py ask "券商的后台系统，要稳重可信"
 python scripts/palette.py ask "新中式民宿的墙面配色"
 python scripts/palette.py ask "配个中国风的颜色"
 python scripts/palette.py ask "用 #c1272d 做品牌色的落地页"
+python scripts/palette.py ask "茶室的网站，加一枝梅花点缀"
+python scripts/palette.py ask "岁末的活动页，加点荷花"
 ```
+
+后两条会额外给出纹样点缀（见[纹样点缀](#纹样点缀)）；第二条还会提醒季节不对。
 
 参数：
 
@@ -332,7 +338,7 @@ python scripts/palette.py info 石青          # 别名解析
 python scripts/palette.py info 中国红        # 泛称也会解析并给出话术
 python scripts/palette.py info 月白
 python scripts/palette.py snap "#c1272d"     # 库外 hex 吸附到最近具名色
-python scripts/palette.py search --family 青 --role 浅底
+python scripts/palette.py search --family 青 --role 点缀
 python scripts/palette.py search --wuxing 木 --season 春 --limit 10
 ```
 
@@ -396,7 +402,7 @@ python scripts/selftest.py
 ```
 
 `preview` 产出的 HTML 里色条按真实建议铺色面积等比画（不是硬编码的 6/3/1）。
-`selftest.py` 应输出「全部通过」，共 711 项断言。改分类、评分或白话词表后必须跑通。
+`selftest.py` 应输出「全部通过」，共 1484 项断言。改分类、评分或白话词表后必须跑通。
 
 ### 命令总表
 
@@ -408,6 +414,7 @@ python scripts/selftest.py
 | `pick "<底+块+点>"` | 定妆，写交接文件 |
 | `info <色名>` | 查单色，支持别名与泛称 |
 | `snap "#xxxxxx"` | 库外 hex 吸附到库内最近具名色 |
+| `motifs` | 列出纹样点缀，可按场景/类别筛 |
 | `search` | 按色系/五行/季节/角色等维度检索 |
 | `generate` | 按场景/氛围/种子生成（已知术语时用） |
 | `complete <色A> <色B>` | 两色补全为一套 |
@@ -522,6 +529,52 @@ python scripts/palette.py pick "鱼肚白+战舰灰+银朱" --scene 水墨 --med
 完整合同见 [references/handoff.md](references/handoff.md)。
 
 ---
+
+## 纹样点缀
+
+除了配色，还能给出中国风的**点缀**：梅兰竹菊莲这类花卉、水墨风景（远山、水纹、云气）、
+几何锦地（回纹、万字、冰裂、缠枝莲）。
+
+**纹样借色，不占色位。** 它借用已有 token 的颜色，资产里一个色值字符都没有，
+不引入新 hex。一枝用点缀色画的梅，它**就是**那 3%，不是额外加的一块红。
+
+`ask` 会自己认出纹样词，不需要额外参数：
+
+```bash
+$ python scripts/palette.py ask "茶室的网站，加一枝梅花点缀"
+...
+点缀  折枝梅（折枝）
+      借 border_strong 的颜色画，不加新色；墨量约 0.8-1.8%
+      放在 版心一角（左上或右下），可被视口裁切；卡片页眉一角
+      尺寸 width: clamp(180px, 22vw, 340px)
+      当心 全套里最安全的吉祥花，几乎无禁忌。唯一一条：与竹同框会被读成缺松的岁寒三友。
+```
+
+看清单、定妆时带上：
+
+```bash
+python scripts/palette.py motifs                       # 全部 22 个
+python scripts/palette.py motifs --scene 水墨           # 只看适配某场景的
+python scripts/palette.py motifs --category landscape   # flora/landscape/geometric/vessel
+
+python scripts/palette.py pick "鱼肚白+战舰灰+银朱" --scene 水墨 --media ui   --motif mei-zhezhi --motif yuanshan-yixian
+```
+
+会自动挡住的几类错：
+
+| 情况 | 反应 |
+| --- | --- |
+| 岁末页面画荷花 | 「水面浮叶是夏的东西，你说的是冬——这个错最容易被看出来」 |
+| 梅配竹而无松 | 「岁寒三友是成套的，缺松枝——要么补齐，要么分置不同区块」 |
+| 说「梅兰竹菊」 | 提醒那是四条屏语汇，一屏一种，不是画进同一页面 |
+| 用五爪龙做 logo | 挡住并给替代：夔纹或卷草的抽象缠绕 |
+| 会员等级用补子禽兽 | 挡住：那是清代官阶，不是等级图标 |
+
+墨量与铺色面积是两套账：只有借彩度色才折价计入那层额度，借中性色零计费。
+压在正文下时看 alpha 上限（跨 6 场景实测表），不是看借哪个 token。
+密纹想铺大面必须配**锦地开光**——留出素白开窗写字，把可读性交给版式而不是透明度。
+
+细则见 [references/motifs.md](references/motifs.md)。
 
 ## 图表用色
 
@@ -646,7 +699,7 @@ from handoff import sequential, categorical    # 图表色
 
 ### 6. 白话映射必须能回归
 
-映射规则写在 `references/vernacular.json` 而不是提示词散文里，配 63 条用例由 `selftest.py` 消费。理由和第 3 节一样：写在散文里的规则会随模型版本漂移，而漂移的症状看起来像「颜色选得不好」，于是会去调评分权重，真正错的却是意图识别。
+映射规则写在 `references/vernacular.json` 而不是提示词散文里，配 95 条用例由 `selftest.py` 消费。理由和第 3 节一样：写在散文里的规则会随模型版本漂移，而漂移的症状看起来像「颜色选得不好」，于是会去调评分权重，真正错的却是意图识别。
 
 设计上的三处要点：
 
@@ -696,7 +749,7 @@ from handoff import sequential, categorical    # 图表色
 
 ```
 zhongguose-palette/
-├── SKILL.md                     技能入口（模型先读这个，99 行的路由表）
+├── SKILL.md                     技能入口（模型先读这个，路由表）
 ├── README.md
 ├── INSTALL.md                   六种宿主的安装方式
 ├── ATTRIBUTION.md               出处
@@ -708,9 +761,11 @@ zhongguose-palette/
 │   ├── colors.json              526 色 + LCH / 对比度 / 五行 / 角色
 │   ├── aliases.json             144 条经典色名 → 库内色（含文化校正与泛称红）
 │   ├── curated.json             20 套手选方案（含白话版出处与注意事项）
-│   ├── vernacular.json          白话 → 内部轴的映射表（535 条线索词）
-│   ├── vernacular_cases.jsonl   63 条映射回归用例
-│   ├── rules.md                 14 条铁律与常见失败
+│   ├── vernacular.json          白话 → 内部轴的映射表（567 条线索词）
+│   ├── vernacular_cases.jsonl   95 条映射回归用例
+│   ├── motifs.json              22 个纹样点缀（借色规则、墨量、季节、礼制禁忌）
+│   ├── motifs.md                纹样用法：借色三形态、两套账、alpha 上限、开光
+│   ├── rules.md                 16 条铁律与常见失败
 │   ├── tweaks.md                白话微调词表
 │   ├── handoff.md               与其他设计技能的交接合同
 │   ├── dataviz.md               图表用色：序列 / 双向 / 分类的边界
@@ -718,7 +773,7 @@ zhongguose-palette/
 │   ├── culture.md               正色间色、五行、禁忌、场景出处
 │   └── examples.md              输出话术样例
 └── scripts/
-    ├── palette.py               CLI（ask / resolve / tweak / pick / snap / search / info / generate / complete / preview）
+    ├── palette.py               CLI（ask / resolve / tweak / pick / motifs / snap / search / info / generate / complete / preview）
     ├── vernacular.py            白话解析器
     ├── render.py                ANSI 面积等比色条
     ├── handoff.py               交接文件生成
@@ -727,7 +782,7 @@ zhongguose-palette/
     ├── taxonomy.py              色系、五行、四季、角色
     ├── build_catalog.py         从 source.json 重建色库
     ├── build_aliases.py         重建别名表
-    └── selftest.py              711 项回归
+    └── selftest.py              1484 项回归
 ```
 
 ---

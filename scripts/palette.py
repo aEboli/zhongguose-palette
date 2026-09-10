@@ -179,6 +179,23 @@ def cmd_ask(cat: Catalog, args: argparse.Namespace) -> int:
         print("没配出合格的方案。说得再具体一点，或者给我一个你想要的色名。")
         return 1
 
+    if it.motifs or it.motif_notes:
+        print()
+        for m in it.motifs:
+            borrow = m["borrows_token"][0] if m.get("borrows_token") else "border"
+            ink = f"墨量约 {m['ink_pct']}%" if m.get("ink_pct") else "墨量 —"
+            if m.get("ink_note"):
+                ink += f"（{m['ink_note']}）"
+            print(f"点缀  {m['name']}（{m['form']}）")
+            print(f"      借 {borrow} 的颜色画，不加新色；{ink}")
+            print(f"      放在 {m['placement']}")
+            if m.get("css_hint"):
+                print(f"      尺寸 {m['css_hint']}")
+            if m.get("culture_note"):
+                print(f"      当心 {m['culture_note']}")
+        for n in it.motif_notes:
+            print(f"      提醒 {n}")
+
     if it.ambiguity == "响/静":
         print("\n歧义:响/静 —— 先按素净那条给的。问一句：那个红是想铺开来一眼看见，还是只留一点点？")
     if args.css:
@@ -235,7 +252,8 @@ def cmd_pick(cat: Catalog, args: argparse.Namespace) -> int:
                          dark=True, n=1)
         dark_pal = dpals[0] if dpals else None
 
-    data = ho.build(cat, pal, dark_pal=dark_pal, chosen_from=args.id)
+    data = ho.build(cat, pal, dark_pal=dark_pal, chosen_from=args.id,
+                    motif_ids=args.motif)
     out_dir = Path(args.out) if args.out else Path(".palette")
     j, c = ho.write(data, out_dir)
     print(f"已定妆：{args.id}")
@@ -250,6 +268,29 @@ def cmd_pick(cat: Catalog, args: argparse.Namespace) -> int:
     v = data["verify"]
     print(f"实测对比: 正文 {v['text_on_bg']}:1  次级 {v['muted_on_bg']}:1  "
           f"按钮字 {v['accent_fg_on_accent']}:1  描边 {v['border_strong_on_bg']}:1")
+    orn = data.get("ornament") or {}
+    if orn.get("unknown_ids"):
+        # 拼错的 id 要报出来，不许静默交出一个没有纹样的文件
+        print(f"\n纹样 id 不存在：{'、'.join(orn['unknown_ids'])}"
+              f"　跑 palette.py motifs 看清单，这几个没写进交接文件")
+    if orn.get("chosen"):
+        print("\n点缀（借色，不占配比）:")
+        for m in orn["chosen"]:
+            ink = f"墨量 {m['ink_pct']}%" if m.get("ink_pct") else ""
+            if m.get("ink_note"):
+                ink += f"（{m['ink_note']}）"
+            print(f"  · {m['name']}  借 {m['borrows_var']}  {ink}  "
+                  f"alpha {m['alpha_suggested']}")
+            print(f"    {m['placement']}")
+    # 纹样自己的问题也要打。原先只打 data["issues"]，
+    # 彩度闸门、alpha 上限、借色白名单、场景不合全都算出来了却没人看见——
+    # 用户要打开 JSON 才知道刚才那个纹样是不合规的。
+    if orn.get("issues"):
+        print("\n纹样的问题（同样不许静默交付）:")
+        for i in orn["issues"]:
+            print(f"  · {i['motif']}: {i['problem']}")
+            if i.get("fix"):
+                print(f"    改法: {i['fix']}")
     if data["cliche"]:
         print("\n撞车提示:")
         for x in data["cliche"]:
@@ -304,6 +345,57 @@ def cmd_tweak(cat: Catalog, args: argparse.Namespace) -> int:
         return 1
     for i, p in enumerate(pals):
         _print_plain(p, cat, vern, bar=not args.no_bar, label=f"改后 {i + 1}")
+    return 0
+
+
+def cmd_motifs(cat: Catalog, args: argparse.Namespace) -> int:
+    """列出可用的纹样。纹样是点缀，借已有 token 的色，不占配比。"""
+    import handoff as ho
+    data = ho._load_motifs()
+    ms = data.get("motifs", [])
+    cross = []
+    if args.scene:
+        # 「适配」要按纹样自己的 fits_scenes 算，不是「没被 avoid_scenes 排除」。
+        # 后者会把年画场景下 12 条列成适配，而其中 11 条自己写的适配场景里没有年画。
+        fitted, crossed = [], []
+        for m in ms:
+            if args.scene in (m.get("avoid_scenes") or []):
+                continue
+            fits = m.get("fits_scenes") or []
+            (fitted if (not fits or args.scene in fits) else crossed).append(m)
+        ms, cross = fitted, crossed
+    if args.category:
+        ms = [m for m in ms if m["category"] == args.category]
+        cross = [m for m in cross if m["category"] == args.category]
+    label = {"flora": "花卉", "landscape": "风景", "geometric": "几何", "vessel": "器物"}
+    print(f"{len(ms)} 个纹样" + (f"（适配 {args.scene}）" if args.scene else ""))
+    for m in ms:
+        borrow = (m.get("borrows_token") or ["border"])[0]
+        season = m.get("season", "无季")
+        rig = {"high": "季节要紧", "mid": "季节略要紧", "none": ""}.get(
+            m.get("season_rigidity", ""), "")
+        ink = f"墨量 {m['ink_pct']}%" if m.get("ink_pct") else "墨量 —"
+        if m.get("ink_note"):
+            ink += f"（{m['ink_note']}）"
+        print()
+        print(f"  {m['id']:18s} {m['name']}  [{label.get(m['category'], m['category'])}]"
+              f"  {season}{'·' + rig if rig else ''}")
+        print(f"    {m['form']} · 借 {borrow} · {ink}")
+        print(f"    {m['placement']}")
+        if m.get("culture_note"):
+            print(f"    当心 {m['culture_note'][:88]}")
+    if cross:
+        # 跨场景借用不是禁止，是要说明。静默丢掉会让用户以为库里没有梅花。
+        print()
+        print(f"能用但不是{args.scene}的语汇（跨场景借用，要向用户说明）:")
+        for m in cross:
+            print(f"  {m['id']:18s} {m['name']}　本是 {'、'.join(m.get('fits_scenes') or [])} 的东西")
+    if data.get("sets"):
+        print()
+        print("成套（不可混、不可拆）:")
+        for name, spec in data["sets"].items():
+            names = [x["name"] for x in data["motifs"] if x["id"] in (spec.get("members") or [])]
+            print(f"  {name}: {'、'.join(names)}")
     return 0
 
 
@@ -491,8 +583,15 @@ def build_parser() -> argparse.ArgumentParser:
     pk.add_argument("--mood", choices=list(MOODS))
     pk.add_argument("--media", choices=list(MEDIA))
     pk.add_argument("--pair-dark", action="store_true", help="同时推导暗色一套")
+    pk.add_argument("--motif", action="append",
+                    help="纹样 id，可多次。用 palette.py motifs 看清单")
     pk.add_argument("--out", help="输出目录，默认 .palette")
     pk.set_defaults(func=cmd_pick)
+
+    mo = sub.add_parser("motifs", help="列出中国风纹样点缀")
+    mo.add_argument("--scene", choices=list(SCENES))
+    mo.add_argument("--category", choices=["flora", "landscape", "geometric", "vessel"])
+    mo.set_defaults(func=cmd_motifs)
 
     s = sub.add_parser("search", help="检索色库")
     s.add_argument("query", nargs="?", default="")

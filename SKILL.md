@@ -33,6 +33,8 @@ python scripts/palette.py ask "茶叶小店的网站，安静一点"
 | 给了两个色要补全 | `complete <色A> <色B>` |
 | 问某个色名 | `info <色名>`（别名会解析：石青 → 群青） |
 | 给了库外 hex | `snap "#xxxxxx"` |
+| 提到梅兰竹菊、荷花、远山、水纹、回纹这类纹样 | `ask` 会自己认出来并给点缀。细则读 `references/motifs.md` |
+| 要看有哪些纹样 | `motifs`（可加 `--scene` / `--category`） |
 | 要做图表 | 读 `references/dataviz.md`，用 `pick` 产出的 `chart` 段 |
 | 要和别的设计技能配合 | 读 `references/handoff.md` |
 | 自己已经说了行话（青花、雅、主色辅色） | 可以直接用 `generate --scene/--mood`，并跟着用他的词 |
@@ -51,6 +53,23 @@ python scripts/palette.py ask "茶叶小店的网站，安静一点"
 
 **出处照带但翻成物象**：脚本的 `来处` / `当心` 两行已经是白话版，原样念。
 
+### 哪些输出能照念，哪些要翻
+
+只有 **`ask` 和 `tweak`** 的输出是干净的白话，可以照着念。selftest 用术语表守着它们。
+
+其余子命令的输出是**给你看的参考件**，里面本来就有行话（五行、彩度、明度带、
+ΔE、LCH、token、场景、媒材）。那是引擎对你说的话，不是对用户说的话——
+照念 `info 石青` 会漏出「五行/彩度/LCH」。
+
+| 命令 | 输出定位 |
+| --- | --- |
+| `ask` / `tweak` | 白话，照念 |
+| `info` / `snap` / `complete` / `motifs` / `search` | 参考件，你读完翻成物象再说 |
+| `pick` / `generate` | 参考件，转达时只说色名、hex、铺在哪、面积、字用什么 |
+| `resolve` | 纯内部，永不面向用户 |
+
+`info 石青` 该怎么翻，`references/examples.md` 例 4 有完整示范。
+
 ## 什么时候才问
 
 默认零提问。问题**永不阻塞交付**——同一条消息里必须已经有一套能用的方案。
@@ -63,6 +82,20 @@ python scripts/palette.py ask "茶叶小店的网站，安静一点"
 别名解析（告知即可，不等回答）、媒材没说（缺省网页）、用户给的品牌色太响
 （直接钉在标点位并说明理由）。
 
+## 纹样是点缀，不是第四个色
+
+用户要梅兰竹菊、荷花、远山这类中国风纹样时，纹样**借用已有 token 的颜色**，
+不引入新色。一枝用点缀色画的梅，它**就是**那 3%，不是额外加的一块红。
+
+- 墨量与铺色面积是两套账。只有借彩度色（点缀 / 成块那层）才折价计入那层的额度，
+  借中性色（描边、面层、墨色）零计费。
+- 压在正文下时看 alpha 上限，不是看借哪个 token（`references/motifs.md` 有实测表）。
+- 密纹想铺大面必须配开光——留出素白开窗写字，把可读性交给版式而不是透明度。
+- 成套的不可混：四君子是四条屏语汇，一屏一种；梅配竹而无松会被读成残缺的岁寒三友。
+- 季节错最容易被识破：荷只属夏，岁末页面画荷即失手。
+- 五爪龙、四爪蟒、十二章、补子禽兽等第有礼制含义，不作普通标记——
+  拒绝时给替代路径（要龙的气质用夔纹或卷草），不要只说不行。
+
 ## 三条不能破的
 
 1. **只出色库里的色。** 每个可见色都要能在 `references/colors.json` 里按中文名找到。
@@ -72,7 +105,7 @@ python scripts/palette.py ask "茶叶小店的网站，安静一点"
 3. **不许暗中换色。** 被否决的方向要说一句原因；为了满足某个要求调整了整套档位
    （例如为了给金把素净调成艳），必须明说。
 
-完整的 14 条与常见失败在 `references/rules.md`。改评分或分类后跑 `python scripts/selftest.py`。
+完整的 16 条与常见失败在 `references/rules.md`。改评分或分类后跑 `python scripts/selftest.py`。
 
 ## 深色
 
@@ -86,6 +119,7 @@ python scripts/palette.py ask "茶叶小店的网站，安静一点"
 | --- | --- |
 | 微调用户的反馈 | `references/tweaks.md` |
 | 和其他设计技能交接 | `references/handoff.md` |
+| 纹样点缀（花卉/风景/几何） | `references/motifs.md` |
 | 做图表 | `references/dataviz.md` |
 | 完整铁律、常见失败 | `references/rules.md` |
 | 用户问「为什么这样配」 | `references/theory.md` |

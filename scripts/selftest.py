@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -13,17 +14,21 @@ import os  # noqa: E402
 import shutil  # noqa: E402
 
 import colorkit as ck  # noqa: E402
-from engine import Catalog, generate, score_trio, tokens  # noqa: E402
+from engine import Catalog, generate, score_trio, tokens, visual_areas  # noqa: E402
+from handoff import TOKEN_KEYS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 FAILS: list[str] = []
+PASSES = 0
 
 
 def check(cond: bool, msg: str) -> None:
+    global PASSES
     if not cond:
         FAILS.append(msg)
         print("FAIL", msg)
     else:
+        PASSES += 1
         print(" ok ", msg)
 
 
@@ -209,7 +214,7 @@ def test_vernacular() -> None:
     cat = Catalog()
     v = Vernacular()
     cases = [json.loads(l) for l in cases_path.read_text(encoding="utf-8").splitlines() if l.strip()]
-    check(len(cases) >= 60, f"白话用例 ≥60 条，实际 {len(cases)}")
+    check(len(cases) >= 75, f"白话用例 ≥75 条，实际 {len(cases)}")
     bad = 0
     for case in cases:
         it = v.resolve(case["say"], catalog=cat)
@@ -223,6 +228,39 @@ def test_vernacular() -> None:
             if got["mood"] == forbidden:
                 bad += 1
                 check(False, f"「{case['say']}」不该判成 {forbidden}")
+        # 纹样断言：纹样与配色是两条轴，用例可以只断言其中一条
+        want_motif = case.get("motif")
+        if want_motif:
+            ids = [m["id"] for m in it.motifs]
+            if want_motif not in ids:
+                bad += 1
+                check(False, f"「{case['say']}」应命中纹样 {want_motif}，实得 {ids}")
+        want_note = case.get("motif_note_contains")
+        if want_note:
+            if not any(want_note in n for n in it.motif_notes):
+                bad += 1
+                check(False, f"「{case['say']}」的提醒里应含「{want_note}」，实得 {it.motif_notes}")
+        # 「不该命中」也要能断言。撞名（荷花白）与误触（画龙点睛）这两类
+        # 只能用反向断言表达——没有它，修好的东西下次会被静默改回去。
+        if case.get("no_motif"):
+            if it.motifs:
+                bad += 1
+                check(False, f"「{case['say']}」不该命中任何纹样，实得 "
+                             f"{[m['id'] for m in it.motifs]}")
+        if case.get("no_motif_note"):
+            if it.motif_notes:
+                bad += 1
+                check(False, f"「{case['say']}」不该带出纹样提醒，实得 {it.motif_notes}")
+        forbid_note = case.get("forbid_note_contains")
+        if forbid_note:
+            hit = [n for n in it.motif_notes if forbid_note in n]
+            if hit:
+                bad += 1
+                check(False, f"「{case['say']}」的提醒里不该含「{forbid_note}」，实得 {hit}")
+        if case.get("no_unheard"):
+            if it.unheard:
+                bad += 1
+                check(False, f"「{case['say']}」不该报没接住，实得 {it.unheard}")
     check(bad == 0, f"白话映射全部命中（{len(cases)} 条用例，{bad} 条不符）")
 
     # 每个进表的线索词都要有用例覆盖，否则表会长成没人验证过的样子
@@ -303,6 +341,395 @@ def test_gold_names() -> None:
         check(name not in GOLD_NAMES, f"{name} 实测不在黄区，不该进金名单")
 
 
+def test_motifs() -> None:
+    """纹样是点缀，不是第四个配比色。这组断言守的就是这条。"""
+    from engine import SCENES
+    from vernacular import SEASON_CUES, Vernacular
+    path = ROOT / "references" / "motifs.json"
+    check(path.exists(), "motifs.json 必须存在")
+    if not path.exists():
+        return
+
+    def no_dup(pairs):
+        seen = set()
+        for k, _ in pairs:
+            if k in seen:
+                raise ValueError("DUPLICATE KEY: " + k)
+            seen.add(k)
+        return dict(pairs)
+
+    data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=no_dup)
+    ms = data["motifs"]
+    check(len(ms) >= 16, f"纹样 ≥16 条，实际 {len(ms)}")
+    ids = [m["id"] for m in ms]
+    check(len(set(ids)) == len(ids), "纹样 id 必须唯一")
+
+    # 核心约束：资产里不许有任何色值，只许借 token
+    LEGAL = set(TOKEN_KEYS) | {"bg"}
+    for m in ms:
+        blob = json.dumps(m, ensure_ascii=False)
+        check("#" not in blob, f"{m['id']} 里不许出现 hex——纹样借色，不带色")
+        borrows = m.get("borrows_token") or []
+        check(bool(borrows), f"{m['id']} 必须写明借哪个 token")
+        for b in borrows:
+            check(b in LEGAL, f"{m['id']} 借的 {b} 不是合法 token")
+        for key in ("fits_scenes", "avoid_scenes"):
+            bad = [s for s in (m.get(key) or []) if s not in SCENES]
+            check(not bad, f"{m['id']} 的 {key} 含非法场景 {bad}")
+
+    # 成套引用必须闭合
+    for name, spec in (data.get("sets") or {}).items():
+        miss = [x for x in (spec.get("members") or []) if x not in ids]
+        check(not miss, f"成套「{name}」引用了不存在的纹样 {miss}")
+    refs = {p for m in ms for p in (m.get("pairs_with") or [])}
+    check(not (refs - set(data.get("sets") or {})),
+          f"pairs_with 引用了未定义的套 {refs - set(data.get('sets') or {})}")
+
+    # 别名必须 ≥2 字，且不得是现有线索词的子串——否则会误触发。
+    # 实测过的三个坑：荷 会在「薄荷绿」里命中，松 会在「轻松」里命中，
+    # 石 被「石窟/石青」占满。
+    v = Vernacular()
+    for m in ms:
+        for al in (m.get("aliases") or []):
+            check(len(al) >= 2, f"{m['id']} 的别名「{al}」太短，会误触发")
+            hit = [c for _a, _v, c, _w in v.cues if al != c and al in c]
+            check(not hit, f"{m['id']} 的别名「{al}」是现有线索词 {hit[:2]} 的子串，会误触发")
+
+    # ink_pct 必须是可打印的纯区间串，ink_range 必须是可计算的数值对。
+    # 混在一起会同时坏两头：打印出「墨量 框内着墨 ≤8%」（拼死一个 %），
+    # 且 charge_rule 的公式没法算，「纹样不占配比」就只是文案。
+    for m in ms:
+        pct = m.get("ink_pct")
+        check(isinstance(pct, str) and re.fullmatch(r"(≤\s*)?[0-9.]+(\s*-\s*[0-9.]+)?", pct or ""),
+              f"{m['id']} 的 ink_pct「{pct}」不是纯区间串，散文要放 ink_note")
+        rng = m.get("ink_range")
+        check(isinstance(rng, list) and len(rng) == 2
+              and all(isinstance(x, (int, float)) for x in rng)
+              and rng[0] <= rng[1],
+              f"{m['id']} 的 ink_range 必须是 [lo, hi] 数值对，实得 {rng}")
+        if isinstance(rng, list) and len(rng) == 2 and isinstance(pct, str):
+            hi = pct.split("-")[-1].replace("≤", "").strip()
+            check(abs(float(hi) - float(rng[1])) < 1e-9,
+                  f"{m['id']} 的 ink_range 上界与 ink_pct 不一致：{rng[1]} vs {hi}")
+
+    # 撞名：纹样别名不许是色名或色别名的子串。实测四处
+    # 荷花 ⊂ 荷花白、莲花 ⊂ 金莲花橙、荷叶 ⊂ 荷叶绿、远山 ⊂ 远山紫。
+    # 数据侧不强制它们消失（荷花本来就该是荷花的线索词），代码侧按
+    # 「更长的色名遮蔽更短的纹样别名」处理，这里验那个遮蔽真的生效。
+    cat0 = Catalog()
+    allnames = [n for n in list(cat0.by_name) + list(cat0.aliases) if len(n) >= 2]
+    collide = [(m["id"], al, n) for m in ms for al in (m.get("aliases") or [])
+               for n in allnames if al in n and al != n]
+    for mid, al, name in collide:
+        it0 = v.resolve(f"用{name}做底色的网站", catalog=cat0)
+        check(mid not in [x["id"] for x in it0.motifs],
+              f"「{name}」是色名，不该唤出纹样 {mid}（别名「{al}」被它整段盖住）")
+        check(not it0.motif_notes,
+              f"「{name}」是色名，不该带出纹样提醒：{it0.motif_notes[:1]}")
+    # 遮蔽不许过头：色名之外单说别名仍要命中
+    for mid, al, _name in collide:
+        it0 = v.resolve(f"页面上加一点{al}", catalog=cat0)
+        check(mid in [x["id"] for x in it0.motifs],
+              f"单说「{al}」应仍命中纹样 {mid}，遮蔽做过头了")
+
+    # 禁忌与成套的 match 键不许落进普通产品话。全是实测踩过的：
+    # 画龙→画龙点睛、四爪→四爪抓手、圆补/方补→圆补丁、填金/满金→填金色/满金币、
+    # 龙凤→龙凤胎、三友→三友咖啡。这一组是那些短键的回归。
+    INNOCENT = [
+        "画龙点睛的落地页", "三友咖啡的网站", "会员按等级解锁功能的后台",
+        "四爪的抓手图标", "圆补丁风格的卡片", "填金色的按钮", "方补丁样式的标签",
+        "满金币充值页", "龙凤胎母婴用品店", "巨蟒健身房的官网",
+    ]
+    for say in INNOCENT:
+        tb = [x["what"] for x in v.taboo_check(say)]
+        st = [n for n, _ in v.match_sets(say)]
+        check(not tb, f"「{say}」不该触发礼制禁忌 {tb}")
+        check(not st, f"「{say}」不该触发成套提醒 {st}")
+    # 反面：真提到了就必须拦住
+    MUST = [("想用五爪龙做 logo", "五爪龙"), ("四爪龙的图腾", "四爪龙"),
+            ("龙凤呈祥的婚庆页", "龙凤"), ("十二章纹的博物馆页", "十二章"),
+            ("大面积填金的封面", "填金")]
+    for say, want in MUST:
+        tb = [x["what"] for x in v.taboo_check(say)]
+        check(any(want in w for w in tb), f"「{say}」应触发禁忌，实得 {tb}")
+    for say, want in [("梅兰竹菊四条屏", "四君子"), ("岁寒三友的插画", "岁寒三友"),
+                      ("三远法的山水页", "三远")]:
+        st = [n for n, _ in v.match_sets(say)]
+        check(want in st, f"「{say}」应触发成套 {want}，实得 {st}")
+
+    # alpha 上限必须覆盖所有可压文字的纹样所借的 token
+    ceil = data.get("alpha_ceilings") or {}
+    for m in ms:
+        if not m.get("under_text"):
+            continue
+        for b in (m.get("borrows_token") or []):
+            check(b in ceil, f"{m['id']} 可压文字却没给 {b} 的 alpha 上限")
+
+    # 借色白名单：交互态、语义徽章、失能态、焦点环不许借给装饰层
+    allowed = set((data.get("ink_sources") or {}).get("allowed") or [])
+    check(bool(allowed), "必须给出合法借色源白名单")
+    for forbidden in ("accent_fg", "accent_hover", "success", "warning", "disabled", "ring"):
+        check(forbidden not in allowed, f"{forbidden} 不该在借色白名单里")
+    for m in ms:
+        for b in (m.get("borrows_token") or []):
+            check(b in allowed, f"{m['id']} 借的 {b} 不在白名单")
+
+    # 彩度闸门：压文字的纹样不许把合成彩度抬起来变成第四个色块
+    import handoff as ho
+    gate = (data.get("chroma_gate") or {}).get("max_delta_c")
+    check(gate is not None, "必须给出彩度抬升上限")
+    cat2 = Catalog()
+    for scene in ("水墨", "青花", "故宫", "年画"):
+        pals = generate(cat2, scene=scene, media="ui", n=1)
+        if not pals:
+            continue
+        # 锁后的 token 才是 production 用的那一套（build() 里的 tok_light）。
+        # 锁前锁后能差很远：故宫 border_strong 锁前鲛青 C=31.6、锁后锌灰 C=2.9，
+        # 用锁前的验会把一条正常纹样判成超额。
+        tok = ho.apply_family_lock(cat2, tokens(cat2, pals[0]), pals[0].scene)[0]
+        accent_pct = visual_areas(pals[0])["pixel_pct"]["accent"]
+        for m in ms:
+            if scene in (m.get("avoid_scenes") or []):
+                continue
+            probs = [p for p in ho.check_ornament(cat2, tok, m, 0.08, scene=scene,
+                                                  accent_pct=accent_pct)
+                     if not p.get("soft")]
+            check(not probs, f"{scene} 的 {m['id']} 在默认 alpha 下应合规：{probs[:1]}")
+        # 反例必须被抓住
+        bad = {"id": "x", "borrows_token": ["accent"], "under_text": True}
+        if tok["accent"].C >= 40:
+            check(bool(ho.check_ornament(cat2, tok, bad, 0.20)),
+                  f"{scene} 压文字借高彩 accent 应被彩度闸门挡住")
+        # avoid_scenes 必须在这里也被拦住。ask 那条路会解释后丢弃，
+        # pick 原先直接照出——同一条规则两个入口给不同答案。
+        for m in ms:
+            if scene not in (m.get("avoid_scenes") or []):
+                continue
+            probs = ho.check_ornament(cat2, tok, m, 0.08, scene=scene)
+            check(any("气质不合" in p["problem"] for p in probs),
+                  f"{m['id']} avoid 了 {scene}，check_ornament 应拦住，实得 {probs[:1]}")
+        # 备选借色也要过闸门，不能只验首选
+        alt = {"id": "alt", "borrows_token": ["border", "accent"], "under_text": True}
+        if tok["accent"].C >= 40:
+            probs = ho.check_ornament(cat2, tok, alt, 0.20)
+            check(any("accent" in p["problem"] for p in probs),
+                  f"{scene} 的备选借色 accent 也该过闸门，实得 {probs}")
+
+    # 禁忌必须有显式 match 词表与替代方案
+    for item in (data.get("taboo") or {}).get("items", []):
+        check(bool(item.get("match")), f"禁忌「{item['what']}」缺 match 词表")
+        check(bool(item.get("instead")), f"禁忌「{item['what']}」缺替代路径——拒绝要给出路")
+
+    # 纹样表读不出来必须响亮地失败，两个加载点行为要一致。
+    # 回落成空表的症状是「你输的纹样 id 不存在」或「我没听懂你说的荷花」——
+    # 把数据文件的语法错报成用户的错，那是错得没有症状。
+    import importlib
+    import tempfile
+    import handoff as ho2
+    bad_json = Path(tempfile.gettempdir()) / "zgs-bad-motifs.json"
+    bad_json.write_text("{ not json", encoding="utf-8")
+    for mod, attr in ((ho2, "MOTIFS_PATH"), (importlib.import_module("vernacular"), "MOTIFS_PATH")):
+        orig = getattr(mod, attr)
+        cache_attr = "_MOTIFS_CACHE" if mod is ho2 else None
+        orig_cache = getattr(mod, cache_attr) if cache_attr else None
+        try:
+            setattr(mod, attr, bad_json)
+            if cache_attr:
+                setattr(mod, cache_attr, None)
+                raised = False
+                try:
+                    mod._load_motifs()
+                except SystemExit:
+                    raised = True
+                check(raised, f"{mod.__name__}._load_motifs 读到坏 JSON 应 SystemExit，不许回落空表")
+            else:
+                v2 = Vernacular()
+                raised = False
+                try:
+                    v2._load_motifs()
+                except SystemExit:
+                    raised = True
+                check(raised, f"{mod.__name__}._load_motifs 读到坏 JSON 应 SystemExit，不许回落空表")
+        finally:
+            setattr(mod, attr, orig)
+            if cache_attr:
+                setattr(mod, cache_attr, orig_cache)
+    bad_json.unlink(missing_ok=True)
+
+    # 季节冲突要能被抓到
+    cat = Catalog()
+    it = v.resolve("岁末的活动页，加点荷花", catalog=cat)
+    check(any("夏" in n for n in it.motif_notes),
+          f"冬季配夏季纹样应报季节冲突，实得 {it.motif_notes}")
+    # 纹样词不许再报成没接住
+    for say in ("荷花", "水墨远山", "来点竹子", "页脚加一条远山"):
+        it = v.resolve(say, catalog=cat)
+        check(bool(it.motifs), f"「{say}」应命中纹样")
+        check(not it.unheard or all("远山" not in u and "荷花" not in u and "竹子" not in u
+                                    for u in it.unheard),
+              f"「{say}」的纹样词不该报成没接住：{it.unheard}")
+    # 礼制纹样要挡住并给替代
+    it = v.resolve("想用五爪龙做 logo", catalog=cat)
+    check(any("五爪龙" in n and "改法" in n for n in it.motif_notes),
+          "五爪龙应被挡住并给替代方案")
+    # 季节线索必须真能读出
+    for season, cues in SEASON_CUES.items():
+        got = v.season_of(cues[0])
+        check(got == season, f"季节线索「{cues[0]}」应读出 {season}，实得 {got}")
+
+    # season_rigidity 的每个档位都要有可观测行为。mid 原先与 none 同路，
+    # 等于那一档白填：折枝梅标着 mid，「盛夏加一枝梅花」却一声不响。
+    rigs = {m.get("season_rigidity") for m in ms}
+    for rig in rigs:
+        check(rig in ("high", "mid", "none"), f"未知的季节刚性档 {rig}")
+    it = v.resolve("盛夏的活动页，加一枝梅花", catalog=cat)
+    check(any("季节" in n or "花" in n and "夏" in n for n in it.motif_notes),
+          f"mid 档纹样季节错也要提醒（梅开盛夏），实得 {it.motif_notes}")
+    it = v.resolve("春天的海报，加折枝菊", catalog=cat)
+    check(any("最容易被看出来" in n for n in it.motif_notes),
+          f"high 档要硬提醒，实得 {it.motif_notes}")
+
+    # 被场景挡掉的纹样词不许既解释又报没接住——那是同一个矛盾换了方向
+    it = v.resolve("年画风格的活动页，加点荷花", catalog=cat)
+    check(any("气质不合" in n for n in it.motif_notes),
+          f"年画配荷花应解释被挡的原因，实得 {it.motif_notes}")
+    check(not any("荷花" in u for u in it.unheard),
+          f"已解释过的纹样词不该再报成没接住：{it.unheard}")
+
+    # 季节只在真起作用时才算听懂。没纹样时说了「秋天」而我们什么都没做，
+    # 那就该报没接住——静默吞掉是把一次失败伪装成成功。
+    it = v.resolve("秋天的网站", catalog=cat)
+    check(not it.motifs, "「秋天的网站」不该凭空生出纹样")
+    check(any("秋天" in u for u in it.unheard),
+          f"没纹样时季节没起作用，应报没接住，实得 {it.unheard}")
+    # 起作用时要回读进解读行
+    it = v.resolve("岁末的活动页，加点荷花", catalog=cat)
+    check(any("冬" in e for e in it.echo),
+          f"季节起了作用就要回读，实得 {it.echo}")
+
+
+def test_ornament_handoff() -> None:
+    """交接段：下游只能拿到「借哪个变量」，不能拿到可以随手改的 hex 渲染入口。"""
+    import handoff as ho
+    cat = Catalog()
+    pals = generate(cat, scene="水墨", media="ui", n=1)
+    if not pals:
+        return
+    data = ho.build(cat, pals[0], motif_ids=["mei-zhezhi", "yuanshan-yixian"])
+    orn = data.get("ornament")
+    check(bool(orn), "handoff 必须有 ornament 段")
+    if not orn:
+        return
+    for seg in ("prime_rule", "chosen", "suggestions", "render", "alpha_ceilings",
+                "budget", "sets", "taboo", "a11y"):
+        check(seg in orn, f"ornament 缺 {seg}")
+    check(len(orn["chosen"]) == 2, f"应选中 2 个纹样，实得 {len(orn['chosen'])}")
+    for c in orn["chosen"]:
+        check(c["borrows_var"].startswith("--color-"),
+              f"{c['name']} 必须借 CSS 变量，实得 {c['borrows_var']}")
+        check(c.get("ink_pct") is not None, f"{c['name']} 缺墨量")
+        check(c.get("placement"), f"{c['name']} 缺落位")
+    check(orn["render"]["preferred"] == "mask", "渲染首选应是 mask")
+    check(len(orn["render"]["must_not"]) >= 3, "必须列出禁止的渲染形态")
+    # 墨量预算与配比额度是两套账，但要给出耦合规则
+    check("charge" in orn["budget"] and orn["budget"]["charge"],
+          "必须给出彩度型借色的计费规则")
+    check(orn["budget"].get("accent_pct") is not None, "必须给出 accent 额度供计费")
+
+    # 计费必须真算出来，不能只发公式。散文式的 charge_rule 谁也执行不了：
+    # 「纹样不占配比」这句话的兑现就在这个数上。
+    #
+    # 必须在彩色场景里验。水墨的 accent 自己就是银灰 C=10.8（<12 的中性档），
+    # 那里所有纹样都零计费——在水墨里验「至少有一条算得出计费」永远失败，
+    # 而失败原因与计费逻辑无关。
+    motifs_all = {m["id"]: m for m in json.loads(
+        (ROOT / "references" / "motifs.json").read_text(encoding="utf-8"))["motifs"]}
+    cpals = generate(cat, scene="年画", media="ui", n=1)
+    if cpals:
+        # 用锁后的 token：production 走的是 build() 里的 tok_light，那是锁过的。
+        # 锁前锁后能差很远（故宫 border_strong 锁前鲛青 C=31.6、锁后锌灰 C=2.9）。
+        ctok = ho.apply_family_lock(cat, tokens(cat, cpals[0]), cpals[0].scene)[0]
+        capct = visual_areas(cpals[0])["pixel_pct"]["accent"]
+        charged = [ho.ink_charge(m, ctok, capct) for m in motifs_all.values()]
+        real = [c for c in charged if c]
+        check(bool(real), "彩色场景里至少要有一个纹样算得出计费（借彩度色的那些）")
+        for c in real:
+            check(isinstance(c["charge_pct"], float) and c["charge_pct"] >= 0,
+                  f"计费必须是数，实得 {c['charge_pct']}")
+            check(c["cap_pct"] > 0, "计费上限必须为正")
+        # 中性借色零计费。判据是**实测彩度**，不是 token 叫什么名字：
+        # 年画的 surface 是荔肉白 C=13.2、border 是菊蕾白 C=20.8，都在彩度档。
+        # 按 token 名断言会在这里失败，而失败原因与计费逻辑无关。
+        neutral_tok = next((k for k in ("text", "muted", "surface", "border")
+                            if k in ctok and ctok[k].C < 12), None)
+        check(neutral_tok is not None, "年画里应至少有一个中性 token 可供验零计费")
+        if neutral_tok:
+            neu = {"id": "neu", "borrows_token": [neutral_tok], "ink_range": [0, 99]}
+            check(ho.ink_charge(neu, ctok, capct) is None,
+                  f"借中性 {neutral_tok}（C={ctok[neutral_tok].C:.1f}）应零计费")
+        # 反面：同一个纹样借彩度色就要计费
+        chroma_tok = next((k for k in ("accent", "secondary", "border")
+                           if k in ctok and ctok[k].C >= 12), None)
+        if chroma_tok:
+            ch = {"id": "ch", "borrows_token": [chroma_tok], "ink_range": [0, 1]}
+            check(ho.ink_charge(ch, ctok, capct) is not None,
+                  f"借彩度 {chroma_tok}（C={ctok[chroma_tok].C:.1f}）必须计费")
+        # 超额必须被 issues 抓住
+        greedy = {"id": "greedy", "borrows_token": ["accent"], "ink_range": [0, 99],
+                  "under_text": False}
+        probs = ho.check_ornament(cat, ctok, greedy, 0.08, accent_pct=capct)
+        check(any("超过点缀额度" in p["problem"] for p in probs),
+              f"墨量 99% 借 accent 应被计费上限挡住，实得 {probs}")
+
+    # suggestions 必须真适配场景，不能只是「没被明确排除」。
+    # 年画场景下曾经 8 条推荐里 7 条自己的 fits_scenes 都没写年画。
+    for scene in ("年画", "水墨", "敦煌", "唐三彩"):
+        ps = generate(cat, scene=scene, media="ui", n=1)
+        if not ps:
+            continue
+        sug = ho.build(cat, ps[0])["ornament"]["suggestions"]
+        for mid in sug:
+            fits = motifs_all[mid].get("fits_scenes") or []
+            check(not fits or scene in fits,
+                  f"{scene} 的推荐 {mid} 自己的适配场景是 {fits}，不该出现在这里")
+
+    # 拼错的 id 必须报出来。早先 JSON 里带了 unknown_ids 但 CLI 不打印，
+    # 只查 JSON 的断言抓不到——所以这里连 CLI 输出一起验。
+    d2 = ho.build(cat, pals[0], motif_ids=["mei-zhezhi", "no-such-motif"])
+    check(d2["ornament"]["unknown_ids"] == ["no-such-motif"],
+          f"未知纹样 id 应被记录，实得 {d2['ornament'].get('unknown_ids')}")
+    import subprocess
+    env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8", NO_COLOR="1")
+    tmp = ROOT / ".selftest-orn"
+    r = subprocess.run([sys.executable, str(ROOT / "scripts" / "palette.py"), "pick",
+                        "鱼肚白+战舰灰+银朱", "--scene", "水墨", "--media", "ui",
+                        "--motif", "mei-zhezhi", "--motif", "no-such-motif",
+                        "--out", str(tmp)],
+                       capture_output=True, text=True, encoding="utf-8", env=env, cwd=str(ROOT))
+    # 退出码要先验。只查 stdout 的话，子进程崩了会报成
+    # 「pick 应打印选中的纹样」——把 traceback 伪装成一条内容缺失。
+    check(r.returncode == 0, f"pick 应正常退出，实得 {r.returncode}：{r.stderr[-300:]}")
+    check("折枝梅" in r.stdout, "pick 应打印选中的纹样")
+    check("不存在" in r.stdout, "pick 应报出拼错的纹样 id")
+    check("借 --color-" in r.stdout, "pick 应说明纹样借哪个变量")
+    check("墨量" in r.stdout and "框内着墨" not in r.stdout,
+          "墨量要打成纯百分数，限定说明另起（原先打出「墨量 框内着墨 ≤8%」）")
+    if tmp.exists():
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    # 纹样自己的问题必须打到用户面前。锦地开光 avoid 了水墨，
+    # pick 原先照出还不报——彩度闸门、alpha 上限全算了却没人看见。
+    r2 = subprocess.run([sys.executable, str(ROOT / "scripts" / "palette.py"), "pick",
+                         "鱼肚白+战舰灰+银朱", "--scene", "水墨", "--media", "ui",
+                         "--motif", "jindi-kaiguang", "--out", str(tmp)],
+                        capture_output=True, text=True, encoding="utf-8", env=env, cwd=str(ROOT))
+    check(r2.returncode == 0, f"pick 应正常退出，实得 {r2.returncode}")
+    check("气质不合" in r2.stdout,
+          f"pick 用了 avoid_scenes 的纹样必须报出来，实得尾部 {r2.stdout[-200:]}")
+    if tmp.exists():
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_documented_commands() -> None:
     """README 里写出来的命令必须都能跑。
 
@@ -325,7 +752,7 @@ def test_documented_commands() -> None:
         ["info", "石青"],
         ["info", "中国红"],
         ["snap", "#c1272d"],
-        ["search", "--family", "青", "--role", "浅底"],
+        ["search", "--family", "青", "--role", "点缀"],
         ["search", "--wuxing", "木", "--season", "春", "--limit", "10"],
         ["generate", "--scene", "青花", "--n", "1"],
         ["generate", "--scene", "补服", "--media", "ui", "--n", "1"],
@@ -336,6 +763,10 @@ def test_documented_commands() -> None:
         ["complete", "月白", "群青"],
         ["preview", "--scene", "水墨", "--media", "ui", "--n", "2",
          "--out", str(tmp / "p.html")],
+        ["motifs"],
+        ["motifs", "--scene", "水墨"],
+        ["motifs", "--category", "landscape"],
+        ["motifs", "--scene", "年画"],
     ]
     for argv in cases:
         r = subprocess.run([sys.executable, script] + argv, capture_output=True,
@@ -343,6 +774,22 @@ def test_documented_commands() -> None:
         check(r.returncode == 0,
               f"README 命令应可跑: palette.py {' '.join(argv[:3])} … "
               f"（退出码 {r.returncode}）")
+        if argv[0] == "search":
+            # 文档里的检索示例不许返回空。空结果会让读者以为库里没有那种色，
+            # 而真正原因往往是筛选维度按字面太窄（「青」按字面只有 9 条）。
+            # 注意别写成 `"0 条" not in stdout`——「10 条」里含「0 条」。
+            n = re.match(r"(\d+) 条", r.stdout)
+            check(bool(n) and int(n.group(1)) > 0,
+                  f"文档里的 search 示例不该返回空：{' '.join(argv)} -> {r.stdout[:20]}")
+        if argv == ["motifs", "--scene", "水墨"]:
+            check("适配 水墨" in r.stdout, "motifs --scene 应声明适配场景")
+            check("能用但不是" not in r.stdout.split("适配 水墨")[0],
+                  "适配列表里不该混入跨场景借用")
+        if argv == ["motifs", "--scene", "年画"]:
+            # 年画的适配纹样很少，表头必须按 fits_scenes 算，不能把 12 条都写成适配
+            m = re.search(r"(\d+) 个纹样（适配 年画）", r.stdout)
+            check(bool(m) and int(m.group(1)) <= 4,
+                  f"年画适配数应按 fits_scenes 算（≤4），实得 {m.group(0) if m else r.stdout[:80]}")
     # --pin 写错格式要给可读的报错而不是 traceback
     r = subprocess.run([sys.executable, script, "generate", "--pin", "枫叶红"],
                        capture_output=True, text=True, encoding="utf-8", env=env, cwd=str(ROOT))
@@ -353,19 +800,52 @@ def test_documented_commands() -> None:
 
 
 def test_plain_output() -> None:
-    """给用户看的输出里不许出现内部术语。靠机制而不是靠自觉。"""
+    """给用户看的输出里不许出现内部术语。靠机制而不是靠自觉。
+
+    只有 ask 与 tweak 的输出是「照着念」的白话。其余子命令的输出是给模型看的
+    参考件，里面本来就有行话（五行、彩度、ΔE、LCH、token…）——那是引擎对模型
+    说的话。这个区分原先只存在于「selftest 只查了 ask」这个事实里，
+    SKILL.md 一个字没写，于是模型照念 info 石青 就会漏出五行与 LCH。
+    现在两头都钉住：文档写明，测试守住边界。
+    """
     import subprocess
     from vernacular import Vernacular
     v = Vernacular()
     script = ROOT / "scripts" / "palette.py"
     env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8", NO_COLOR="1")
-    for say in ("茶叶小店的网站，安静一点", "做个后台仪表盘，深色模式", "过年活动页，要喜庆"):
-        r = subprocess.run([sys.executable, str(script), "ask", say, "--no-bar"],
-                           capture_output=True, text=True, encoding="utf-8", env=env,
-                           cwd=str(ROOT))
-        check(r.returncode == 0, f"ask「{say}」应正常退出，实得 {r.returncode}")
+
+    # 照念档：必须干净
+    VERBATIM = [
+        ["ask", "茶叶小店的网站，安静一点", "--no-bar"],
+        ["ask", "做个后台仪表盘，深色模式", "--no-bar"],
+        ["ask", "过年活动页，要喜庆", "--no-bar"],
+        ["ask", "茶室的网站，加一枝梅花点缀", "--no-bar", "--n", "1"],
+        ["ask", "岁末的活动页，加点荷花", "--no-bar", "--n", "1"],
+        ["ask", "用荷花白做底色的网站", "--no-bar", "--n", "1"],
+        ["tweak", "太素了，再艳一点", "--mood", "雅", "--no-bar", "--n", "1"],
+        ["tweak", "红少一点", "--mood", "艳", "--no-bar", "--n", "1"],
+    ]
+    for argv in VERBATIM:
+        r = subprocess.run([sys.executable, str(script)] + argv, capture_output=True,
+                           text=True, encoding="utf-8", env=env, cwd=str(ROOT))
+        label = f"{argv[0]}「{argv[1]}」"
+        check(r.returncode == 0, f"{label} 应正常退出，实得 {r.returncode}")
         leaked = v.check_plain(r.stdout)
-        check(not leaked, f"ask「{say}」输出泄露术语 {leaked}")
+        check(not leaked, f"{label} 输出泄露术语 {leaked}")
+
+    # 参考件档：SKILL.md 必须说明它们要翻，不能照念。
+    # 不断言它们干净——那些行话是引擎对模型说的话，本来就该在。
+    skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+    check("哪些输出能照念" in skill, "SKILL.md 必须说明哪些输出能照念、哪些要翻")
+    for cmd in ("info", "snap", "complete", "motifs", "search", "pick", "generate", "resolve"):
+        check(cmd in skill, f"SKILL.md 的输出定位表里应有 {cmd}")
+    # 反面守住：真有一天 ask 被改成输出行话，上面那组会红；
+    # 而参考件档若被误当成白话，这条会提醒边界在哪。
+    r = subprocess.run([sys.executable, str(script), "info", "石青"], capture_output=True,
+                       text=True, encoding="utf-8", env=env, cwd=str(ROOT))
+    check(bool(v.check_plain(r.stdout)),
+          "info 的输出本就含行话（它是参考件）。若这条变绿，说明它已被改成白话档，"
+          "那 SKILL.md 的输出定位表也要跟着改")
 
 
 def test_dark_ground() -> None:
@@ -464,6 +944,132 @@ def test_handoff() -> None:
         check(ls == sorted(ls), f"序列色明度必须单调，实得 {ls}")
 
 
+def test_doc_numbers() -> None:
+    """文档里的数量声明必须与真实数据一致。
+
+    这一组是所有数字漂移的根因防线。之前 README 写「711 项断言」，改成
+    「1085 项」，而真实值已经是 1225——没有断言盯着，这个数每加一批测试
+    就错一次，而它出现在 README、INSTALL 和目录树四处。
+
+    数字本身不重要，重要的是它出现在「这个项目有多少回归保护」这句话里。
+    写错了会让读者以为覆盖面比实际小，或者以为大。
+    """
+    import io
+    docs = {p.name: p.read_text(encoding="utf-8")
+            for p in [ROOT / "README.md", ROOT / "INSTALL.md", ROOT / "SKILL.md"]
+            if p.exists()}
+    refs = ROOT / "references"
+
+    def jload(name):
+        return json.loads((refs / name).read_text(encoding="utf-8"))
+
+    colors = jload("colors.json")
+    colors = colors if isinstance(colors, list) else colors.get("colors", [])
+    aliases = jload("aliases.json")
+    motifs = jload("motifs.json")
+    vern = jload("vernacular.json")
+
+    def count_strings(x) -> int:
+        if isinstance(x, list):
+            return sum(1 if isinstance(i, str) else count_strings(i) for i in x)
+        if isinstance(x, dict):
+            return sum(count_strings(v) for v in x.values())
+        return 0
+
+    n_cases = sum(1 for line in io.open(refs / "vernacular_cases.jsonl", encoding="utf-8")
+                  if line.strip())
+    from engine import MEDIA, MOODS, SCENES
+    role_counts: dict = {}
+    for c in colors:
+        for r in (c.get("roles") or c.get("design_roles") or []):
+            role_counts[r] = role_counts.get(r, 0) + 1
+    truth = {
+        "色库条数": len(colors),
+        "别名条数": len(aliases["aliases"]),
+        "白话用例": n_cases,
+        "纹样条数": len(motifs["motifs"]),
+        "线索词条数": count_strings(vern["in"]),
+        "场景数": len(SCENES),
+        "氛围数": len(MOODS),
+        "媒材数": len(MEDIA),
+        "token 数": len(TOKEN_KEYS),
+        "浅底池": role_counts.get("浅底", 0),
+        "墨色池": role_counts.get("墨色", 0),
+        "RGB 不一致": sum(1 for c in colors if "rgb_source" in c),
+    }
+    # 每个真实值都要能在文档里找到它的声明，且声明的数与真实值相等。
+    # 正则要覆盖同一个数的**所有**写法——漏一种，那一处就会静默漂移。
+    PATTERNS = {
+        "色库条数": r"(\d+) ?(?:个中国传统色|条，每条含|色 \+|个具名色|个色平铺|条）|条` —— `co)",
+        "别名条数": r"(\d+) 条(?:经典色名|别名做文化校正)",
+        "白话用例": r"(\d+) 条(?:映射回归用例|回归用例|用例由)",
+        "纹样条数": r"(?:全部 )?(\d+) 个纹样|全部 (\d+) 个",
+        "线索词条数": r"(\d+) 条(?:线索词|白话线索词)",
+        "场景数": r"(\d+) 个场景|这 (\d+) 个之一",
+        "氛围数": r"(\d+) 种氛围",
+        "媒材数": r"(\d+) 种媒材",
+        "token 数": r"(\d+) 个可直接落地的 token",
+        "浅底池": r"能当纸地的有哪 (\d+) 个",
+        "墨色池": r"能当正文墨色的有哪 (\d+) 个",
+        "RGB 不一致": r"(\d+) 条记录的 RGB",
+    }
+    for label, pat in PATTERNS.items():
+        real = truth[label]
+        found = []
+        for fname, text in docs.items():
+            for m in re.finditer(pat, text):
+                # 有多分支的模式，取命中的那一组
+                num = next((g for g in m.groups() if g), None)
+                if num is not None:
+                    found.append((fname, int(num)))
+        check(bool(found), f"文档里应有「{label}」的声明（模式 {pat}）")
+        wrong = [(f, n) for f, n in found if n != real]
+        check(not wrong, f"{label} 真实是 {real}，文档写成 {wrong}")
+
+    # 铁律条数：rules.md 的 ## N 小节数，与 README / SKILL 的声明比对
+    rules = (refs / "rules.md").read_text(encoding="utf-8")
+    n_rules = len(re.findall(r"^## \d+\.", rules, re.M))
+    check(n_rules >= 14, f"铁律至少 14 条，实际 {n_rules}")
+    for fname, text in docs.items():
+        for m in re.finditer(r"(\d+) 条(?:铁律|与常见失败)", text):
+            check(int(m.group(1)) == n_rules,
+                  f"{fname} 写「{m.group(1)} 条铁律」，rules.md 实际 {n_rules} 条")
+
+    # 别名解析必须真能走通：文档举的例子不许是死的
+    cat = Catalog()
+    for alias, want in [("石青", "群青"), ("玄色", "可可棕"), ("胭脂", "苋菜红")]:
+        got = cat.aliases.get(alias)
+        check(got is not None, f"文档举的别名「{alias}」应能解析")
+        if got is not None:
+            name = got.name if hasattr(got, "name") else got
+            check(want in str(name), f"别名「{alias}」应解析到 {want}，实得 {name}")
+
+
+def check_doc_assertion_count(real: int) -> None:
+    """文档声明的断言总数必须等于实际跑出来的条数。
+
+    放在所有测试之后，因为总数在最后一条断言跑完才定型。它自己不调用
+    check()——那会改变它正在校验的那个数。
+
+    这个数漂过两次（711 -> 1085，而真实已是 1225）。改成精确比对之后，
+    加测试就必须同步改文档：一行的摩擦，换掉一个会静默骗人的数字。
+
+    real 由调用方在调用前快照。不在函数内部现算：本函数自己会往 FAILS 里
+    追加条目，现算会让「比对用的数」与「末行打印的数」差出自己的失败数。
+    """
+    for path in (ROOT / "README.md", ROOT / "INSTALL.md"):
+        if not path.exists():
+            continue
+        for m in re.finditer(r"(\d{3,}) 项(?:回归|断言)", path.read_text(encoding="utf-8")):
+            claimed = int(m.group(1))
+            if claimed != real:
+                FAILS.append(f"{path.name} 写的断言数 {claimed} 与实际 {real} 不符"
+                             f"——把文档里这个数改成 {real}")
+                print("FAIL", FAILS[-1])
+            else:
+                print(" ok ", f"{path.name} 断言数声明 {claimed} 与实际一致")
+
+
 def main() -> int:
     test_colorkit()
     test_catalog()
@@ -479,9 +1085,15 @@ def main() -> int:
     test_token_family()
     test_seed_errors()
     test_handoff()
+    test_motifs()
+    test_ornament_handoff()
     test_documented_commands()
     test_plain_output()
+    test_doc_numbers()
+    total = PASSES + len(FAILS)  # 必须在文档校验之前快照：那一步自己会追加失败
+    check_doc_assertion_count(total)
     print()
+    print(f"共 {total} 项断言")
     if FAILS:
         print(f"{len(FAILS)} 项失败")
         return 1

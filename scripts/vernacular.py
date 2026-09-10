@@ -24,6 +24,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 ROOT = Path(__file__).resolve().parents[1]
 VERNACULAR_PATH = ROOT / "references" / "vernacular.json"
+MOTIFS_PATH = ROOT / "references" / "motifs.json"
+
+# 季节线索。用错季节是纹样上最容易被识破的错（冬天的页面画荷花），
+# 而现有词表里几乎没有季节——「秋天」「夏天」原本都报「没接住」。
+SEASON_CUES = {
+    "春": ["春天", "春季", "初春", "早春", "开春", "阳春", "春日"],
+    "夏": ["夏天", "夏季", "初夏", "盛夏", "仲夏", "夏日", "消暑"],
+    "秋": ["秋天", "秋季", "初秋", "深秋", "金秋", "秋日", "重阳"],
+    "冬": ["冬天", "冬季", "初冬", "深冬", "隆冬", "冬日", "岁末", "年末"],
+}
 
 _HEX_RE = re.compile(r"#[0-9a-fA-F]{6}\b")
 
@@ -48,6 +58,12 @@ class Intent:
     alt_scenes: list = field(default_factory=list)
     explicit_light: bool = False
     unheard: list = field(default_factory=list)
+    # 纹样是独立的一轴。它与 scene 不互斥也不冲突：「梅花点缀的网站」应该同时
+    # 得到 scene=江南（一套合理配色）和 motif=折枝梅（一个点缀），两者互补。
+    # 把纹样词当成场景选择器是这条路最容易犯的错——纹样就变成了配比色。
+    season: str | None = None
+    motifs: list = field(default_factory=list)
+    motif_notes: list = field(default_factory=list)
 
     def to_cli(self) -> list[str]:
         """转成 palette.py generate 的参数。"""
@@ -77,6 +93,11 @@ class Intent:
             "signal_axes": self.signal_axes,
             "alt_scenes": self.alt_scenes,
             "unheard": self.unheard,
+            "motifs": [{"id": m["id"], "name": m["name"],
+                        "borrows": m["borrows_token"], "ink_pct": m.get("ink_pct"),
+                        "placement": m["placement"]} for m in self.motifs],
+            "motif_notes": self.motif_notes,
+            "season": self.season,
             "echo": self.echo,
             "hits": self.hits,
             "scores": {k: {kk: round(vv, 2) for kk, vv in v.items()} for k, v in self.scores.items()},
@@ -97,6 +118,7 @@ class Vernacular:
         self.out = self.data["out"]
         self.banned = self.data["banned_terms"]
         # 展开成 (轴, 值, 线索词, 权重)，长词优先以免「青」抢掉「青花」
+        self._motifs = None
         self.cues: list[tuple[str, str, str, float]] = []
         for axis, values in self.data["in"].items():
             for value, tiers in values.items():
@@ -236,11 +258,21 @@ class Vernacular:
         it.n = int(self.defaults.get("n", 2))
 
         it.ambiguity = self._ambiguity(scores)
+        it.season = self.season_of(text)
+        it.motifs, it.motif_notes, heard_motif = self.match_motifs(
+            text, scene=it.scene, season=it.season, catalog=catalog)
         it.echo = self._echo(it)
-        it.unheard = self._unheard(text, hits, it)
+        for name, spec in self.match_sets(text):
+            members = [m["name"] for m in self._load_motifs()["motifs"]
+                       if m["id"] in (spec.get("members") or [])]
+            it.motif_notes.append(f"「{name}」是成套语汇（{'、'.join(members)}）。{spec.get('rule','')}")
+        for item in self.taboo_check(text):
+            it.motif_notes.append(f"{item['what']}不作普通标记：{item['why']}。改法：{item['instead']}")
+        it.unheard = self._unheard(text, hits, it, heard_motif)
         return it
 
-    def _unheard(self, text: str, hits: list, it: Intent) -> list[str]:
+    def _unheard(self, text: str, hits: list, it: Intent,
+                 heard_motif: list | None = None) -> list[str]:
         """挑出用户说了、但一个轴都没命中的实词。
 
         没有这一项就会静默失败：用户说「要有仙气」，我们照缺省给出一套合理但
@@ -272,6 +304,27 @@ class Vernacular:
         for term in self.data.get("neutral_terms", []):
             if term in text:
                 mark(term)
+        # 纹样与季节也是听懂了的——它们走独立轴，不在 hits 里，
+        # 不标记的话「荷花」会既命中纹样又被报成没接住，自相矛盾。
+        # 用命中过的别名（过滤前），不是留用的纹样：被场景挡掉的那个词
+        # 已经在 motif_notes 里解释过了，再报一次没接住是同一个矛盾换了方向。
+        for al in (heard_motif or []):
+            mark(al)
+        # 季节只在真起了作用时才算听懂。它现在只驱动纹样的季节提醒，
+        # 没纹样就什么都不改——那种情况下报「没接住秋天」是对的，
+        # 因为用户确实说了秋天而我们确实没拿它做任何事。
+        if it.season and (it.motifs or it.motif_notes):
+            for cue in SEASON_CUES.get(it.season, []):
+                if cue in text:
+                    mark(cue)
+        for item in ((self._load_motifs().get("taboo") or {}).get("items") or []):
+            for key in (item.get("match") or [item["what"]]):
+                if key in text:
+                    mark(key)
+        for spec in ((self._load_motifs().get("sets") or {}).values()):
+            for al in (spec.get("aliases") or []):
+                if al in text:
+                    mark(al)
         FILLER = set("的了是要做个想给我你他她它们这那有和跟与就也很再一点些吧啊呢吗把被让对从在上下里外前后能会可以帮设计颜色出来看用种样比较觉得需要希望忙")
         chunks: list[tuple[int, str]] = []
         cur, cur_start = [], 0
@@ -320,6 +373,145 @@ class Vernacular:
             if hi > 0 and (hi - lo) / hi < 0.15:
                 return "响/静"
         return None
+
+    # ---------------------------------------------------------------- 纹样
+
+    def _load_motifs(self) -> dict:
+        """读纹样表。读不出来要响亮地失败，不许回落成空表。
+
+        回落的症状是「我没听懂你说的荷花」——把一个数据文件的语法错报成
+        用户的话没说清。与 handoff._load_motifs 同一处理，两边必须一致：
+        一边响一边闷，坏的那次就看运气走到哪条路。
+        """
+        if self._motifs is None:
+            try:
+                self._motifs = json.loads(MOTIFS_PATH.read_text(encoding="utf-8"))
+            except FileNotFoundError as e:
+                raise SystemExit(f"读不到纹样表 {MOTIFS_PATH}：{e}") from e
+            except json.JSONDecodeError as e:
+                raise SystemExit(
+                    f"纹样表 {MOTIFS_PATH} 不是合法 JSON：第 {e.lineno} 行 {e.msg}") from e
+        return self._motifs
+
+    def season_of(self, text: str) -> str | None:
+        """从话里读出季节。纹样季节错是最容易被识破的一种错。"""
+        best, best_len = None, 0
+        for season, cues in SEASON_CUES.items():
+            for cue in cues:
+                if cue in text and len(cue) > best_len:
+                    best, best_len = season, len(cue)
+        return best
+
+    def _shadowed(self, text: str, catalog) -> set:
+        """被色名占住的字位。纹样别名落在这里面就不算纹样请求。
+
+        库内有荷花白、金莲花橙、荷叶绿、远山紫，而纹样别名有荷花、莲花、荷叶、远山。
+        不遮蔽的话「用荷花白做底色的网站」会既解析出 seed 荷花白、又凭空多一枝荷；
+        岁末场景下还要倒过来训话说「水面浮叶是夏的东西」——用户根本没提荷花，
+        他说的是一个色名。这类错最难查：症状是「多给了个纹样」，
+        看起来像纹样匹配太松，真正的原因是两张词表撞了名。
+        """
+        if catalog is None:
+            return set()
+        out: set = set()
+        for name in list(catalog.by_name) + list(catalog.aliases):
+            if len(name) < 2:
+                continue
+            start = 0
+            while True:
+                pos = text.find(name, start)
+                if pos < 0:
+                    break
+                out.update(range(pos, pos + len(name)))
+                start = pos + 1
+        return out
+
+    def match_motifs(self, text: str, scene: str | None = None,
+                     season: str | None = None,
+                     catalog=None) -> tuple[list, list, list]:
+        """按白话挑纹样。返回 (留用的纹样, 要向用户说明的话, 命中过的别名)。
+
+        纹样与场景是两条独立的轴。命中纹样不改配色，只追加一个点缀。
+
+        第三个返回值是**过滤前**命中过的别名。_unheard 要用它：只按留用的纹样
+        标记，被场景挡掉的那个词就会既出现在「气质不合」的说明里、又被报成没接住。
+        """
+        data = self._load_motifs()
+        motifs = data.get("motifs", [])
+        season = season or self.season_of(text)
+        shadow = self._shadowed(text, catalog)
+        hits, notes, heard = [], [], []
+        for m in motifs:
+            # 命中过的别名要全收，不能命中一个就 break。折枝梅的别名里
+            # 梅花 排在 一枝梅 之前，「加一枝梅花点缀」会先中 梅花 就停下，
+            # 于是 一枝 没被标记，残渣「加枝」被报成没接住——纹样明明认出来了。
+            matched_here = []
+            for al in m.get("aliases", []):
+                pos = text.find(al)
+                # 别名整段被更长的色名盖住 -> 用户说的是色名，不是纹样
+                while pos >= 0 and all(i in shadow for i in range(pos, pos + len(al))):
+                    pos = text.find(al, pos + 1)
+                if pos >= 0:
+                    matched_here.append(al)
+            if matched_here:
+                heard.extend(matched_here)
+                hits.append(m)
+        # 场景不合的挡掉，并说明原因（不静默丢弃）
+        kept = []
+        for m in hits:
+            if scene and scene in (m.get("avoid_scenes") or []):
+                notes.append(f"{m['name']}与这套配色的气质不合（{scene}），换一个或换配色")
+                continue
+            kept.append(m)
+        # 季节冲突提醒。high 硬说，mid 软说，none 不提。
+        # mid 原先与 none 同路，等于那个档位白填：折枝梅标着「冬末早春·mid」，
+        # 「盛夏的活动页加一枝梅花」却一声不响——而梅开在盛夏正是最好认的那种错。
+        if season:
+            for m in kept:
+                rig = m.get("season_rigidity")
+                ms = m.get("season", "")
+                if rig not in ("high", "mid") or ms in ("无季", "四季") or season in ms:
+                    continue
+                if rig == "high":
+                    notes.append(f"{m['name']}是{ms}的东西，你说的是{season}——这个错最容易被看出来")
+                else:
+                    notes.append(f"{m['name']}本是{ms}的花，你说的是{season}——"
+                                 f"不算硬错，但懂的人会觉得季节没对上")
+        # 成套关系
+        ids = {m["id"] for m in kept}
+        for name, spec in (data.get("sets") or {}).items():
+            members = set(spec.get("members") or [])
+            inter = ids & members
+            if len(inter) >= 2 and inter != members:
+                missing = [x for x in members - inter]
+                names = [mm["name"] for mm in motifs if mm["id"] in missing]
+                notes.append(f"「{name}」是成套的，你选的这几件缺 {'、'.join(names)}"
+                             f"——要么补齐，要么分置到不同区块。{spec.get('rule','')}")
+        return kept, notes, heard
+
+    def taboo_check(self, text: str) -> list:
+        """礼制等级纹样的拦截。拒绝要给替代路径，不要只说不行。
+
+        用显式 match 词表，不从 what 截字符串——「补子的禽兽等第作用户等级」
+        整条当键永远匹配不上，而用户就是会那样说。
+        """
+        out = []
+        for item in (self._load_motifs().get("taboo") or {}).get("items", []):
+            for key in (item.get("match") or [item["what"]]):
+                if key in text:
+                    out.append(item)
+                    break
+        return out
+
+    def match_sets(self, text: str) -> list:
+        """用户直接点名成套（「梅兰竹菊」「岁寒三友」）时，提醒它是成套语汇。"""
+        out = []
+        for name, spec in (self._load_motifs().get("sets") or {}).items():
+            for al in (spec.get("aliases") or []):
+                if al in text:
+                    out.append((name, spec))
+                    break
+        return out
 
     # ---------------------------------------------------------------- 微调
 
@@ -401,6 +593,10 @@ class Vernacular:
             parts.append("深色底")
         elif it.explicit_light:
             parts.append("浅色底")
+        # 季节读出来了就回读。它只驱动纹样的季节提醒，不改配色——
+        # 不回读的话用户无从知道我们把「岁末」听成了冬，而那句提醒正是据此发的。
+        if it.season and (it.motifs or it.motif_notes):
+            parts.append(f"{it.season}天")
         return parts
 
     # ---------------------------------------------------------------- 输出净化
