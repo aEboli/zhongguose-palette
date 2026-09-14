@@ -945,6 +945,218 @@ def test_plain_output() -> None:
           "那 SKILL.md 的输出定位表也要跟着改")
 
 
+def test_render() -> None:
+    """色条必须在 Claude Code 的默认环境里真的出现。
+
+    原来 color_mode() 把「不要发 ANSI」和「不要表达面积」绑在一个开关上：
+    宿主实测 NO_COLOR=1 且 stdout 是管道，于是那一档只打三行「底 #hex 约 N%」，
+    与落位那三行重复，用户从来没看见过色条——「三色不等权」全靠文字解释。
+    工具输出进的是模型上下文而不是用户终端，所以管道里的修法是 Unicode 方块，
+    不是强发转义。
+    """
+    import contextlib
+    import itertools
+    import types
+    import render as rd
+    from vernacular import Vernacular
+
+    class _FakeStdout:
+        def __init__(self, tty: bool, encoding: str | None = "utf-8") -> None:
+            self._tty, self.encoding = tty, encoding
+
+        def isatty(self) -> bool:
+            return self._tty
+
+    @contextlib.contextmanager
+    def fake_env(env: dict, tty: bool = False, osname: str = "posix",
+                 encoding: str | None = "utf-8"):
+        """替掉 render 模块里的 os/sys，才能在一台机器上跑完整张判定表。"""
+        old_os, old_sys = rd.os, rd.sys
+        rd.os = types.SimpleNamespace(environ=env, name=osname)
+        rd.sys = types.SimpleNamespace(stdout=_FakeStdout(tty, encoding))
+        if hasattr(rd._win_vt_ok, "cache_clear"):
+            rd._win_vt_ok.cache_clear()  # 缓存过的探测结果会串到下一行判定表
+        try:
+            yield
+        finally:
+            rd.os, rd.sys = old_os, old_sys
+            if hasattr(rd._win_vt_ok, "cache_clear"):
+                rd._win_vt_ok.cache_clear()
+
+    ENTRIES = [("底", "#f7f4ed", 78), ("块", "#495c69", 19), ("点", "#f43e06", 3)]
+
+    # ---- 真彩档：转义要在，宽度要按真实面积
+    tc = rd.area_bar(ENTRIES, mode="truecolor")
+    bar, legend = tc.split("\n")
+    check("\033[48;2;" in bar, "真彩色条应发 48;2 背景转义")
+    widths = [len(m) for m in re.findall(r"(?:\033\[48;2;\d+;\d+;\d+m)( +)", bar)]
+    check(widths == [42, 10, 2], f"78/19/3 @54 应落成 42/10/2，实得 {widths}")
+    check("\033[38;2;" not in legend and "■" not in legend,
+          "legend 不许再用前景 ■：浅底在浅色主题上只有 1.01:1，等于隐形")
+    check(legend.count("\033[48;2;") == 3, "legend 三个方块都要用背景铺")
+    check("%" not in legend and "#" not in legend,
+          "legend 不带 hex 与百分比：数字真源是 palette.py 的落位三行")
+    for label in ("底", "块", "点"):
+        check(label in legend, f"legend 必须保留「{label}」标签，否则成了无标注色带")
+
+    # ---- 方块档：没有转义，但面积照样看得见
+    blk = rd.area_bar(ENTRIES, mode="block")
+    bar, legend = blk.split("\n")
+    check("\033" not in blk, "方块档不许冒任何转义——它进的是模型上下文")
+    runs = [(ch, len(list(g))) for ch, g in itertools.groupby(bar)]
+    check([n for _, n in runs] == [42, 10, 2],
+          f"方块档宽度也要按真实面积，实得 {runs}")
+    check(len({ch for ch, _ in runs}) == 3, f"相邻块要用三级密度区分，实得 {runs}")
+    check(len(bar) == 54, f"方块条总宽应是 54，实得 {len(bar)}")
+    check("▌" not in blk and "│" not in blk,
+          "块间不许加分隔符：它吃掉 1 格宽度，点缀只有 2 格时比例直接崩")
+    check("%" not in blk and "#" not in blk and "约" not in blk,
+          "方块档不许再打「底 #hex 约 N%」——那与落位三行重复")
+    for label in ("底", "块", "点"):
+        check(label in legend, f"方块档 legend 必须保留「{label}」标签")
+    check(rd.area_bar(ENTRIES, mode="none").split("\n")[0] == bar,
+          "none 传进 area_bar 也要画方块，不能画出一条空白")
+    v = Vernacular()
+    check(not v.check_plain(blk), f"方块与角色标签不许算术语泄漏：{v.check_plain(blk)}")
+
+    # ---- bar_mode 永不「什么都不画」
+    for env, tty, osname in (({"NO_COLOR": "1"}, False, "posix"),
+                             ({}, False, "posix"),
+                             ({"TERM": "dumb"}, True, "posix"),
+                             ({"NO_COLOR": "1", "FORCE_COLOR": "1"}, True, "posix")):
+        with fake_env(env, tty, osname):
+            check(rd.bar_mode() in ("truecolor", "256", "block"),
+                  f"bar_mode 在 {env} tty={tty} 下不许返回 none")
+            check(rd.color_mode() != "none" or rd.bar_mode() == "block",
+                  f"不发转义时必须退到方块，实得 {rd.bar_mode()}")
+
+    test_render_color_mode(rd, fake_env)
+
+
+def test_render_color_mode(rd, fake_env) -> None:
+    """color_mode() 的整张判定表。每一行都对应一个真实踩过的坑。"""
+    CASES = [
+        # (env, tty, os.name, 期望, 为什么)
+        ({"NO_COLOR": "1"}, True, "posix", "none", "NO_COLOR 第一优先"),
+        ({"NO_COLOR": "1", "FORCE_COLOR": "1"}, True, "posix", "none",
+         "NO_COLOR 压得住 FORCE_COLOR"),
+        ({"FORCE_COLOR": "1"}, False, "posix", "truecolor", "FORCE_COLOR 管道下也强开"),
+        ({"FORCE_COLOR": "0"}, False, "posix", "none",
+         "FORCE_COLOR=0 只是不强制，不该当成开"),
+        ({"FORCE_COLOR": "0", "TERM": "xterm-256color"}, True, "posix", "256",
+         "FORCE_COLOR=0 应落回正常判定而不是强开真彩"),
+        ({"FORCE_COLOR": ""}, True, "posix", "none", "空 FORCE_COLOR 不算设过"),
+        ({"TERM": "xterm-256color"}, False, "posix", "none", "管道不发转义"),
+        ({"TERM": "dumb"}, True, "posix", "none", "dumb 仍是 none"),
+        ({"TERM": ""}, True, "posix", "none", "非 Windows 的空 TERM 是 none"),
+        ({"TERM": "xterm-256color"}, True, "posix", "256", "256 档"),
+        ({"TERM": "xterm-256color-direct"}, True, "posix", "truecolor",
+         "direct 必须排在「含 256 则回 256」之前，否则被误降"),
+        ({"TERM": "xterm-24bit"}, True, "posix", "truecolor", "TERM 含 24bit 是真彩"),
+        ({"TERM": "xterm-256color", "COLORTERM": "truecolor"}, True, "posix", "truecolor",
+         "COLORTERM=truecolor 优先于 TERM 的 256"),
+        ({"TERM": "xterm-256color", "COLORTERM": "24bit"}, True, "posix", "truecolor",
+         "COLORTERM=24bit 也是真彩"),
+        ({"TERM": "xterm"}, True, "posix", "truecolor", "普通 xterm 给真彩"),
+        ({"TERM": "", "WT_SESSION": "x"}, True, "nt", "truecolor",
+         "Windows Terminal 的 TERM 是空的，不该因此掉到 none"),
+        ({"WT_SESSION": "x"}, True, "nt", "truecolor", "Windows 根本没有 TERM 也一样"),
+        ({"ConEmuANSI": "ON"}, True, "nt", "truecolor", "ConEmu 认真彩"),
+        ({"TERM_PROGRAM": "vscode"}, True, "nt", "truecolor", "VSCode 终端认真彩"),
+        ({"ANSICON": "1"}, True, "nt", "256", "ANSICON 只做 16 色仿真，别抬成真彩"),
+        ({"TERM": "dumb", "WT_SESSION": "x"}, True, "nt", "none", "Windows 上 dumb 也是 none"),
+        ({}, False, "nt", "none", "Windows 管道下不碰控制台，一律 none"),
+    ]
+    for env, tty, osname, want, why in CASES:
+        with fake_env(env, tty, osname):
+            got = rd.color_mode()
+        check(got == want, f"color_mode {env} tty={tty} os={osname} 应 {want}，实得 {got}（{why}）")
+
+    # Windows 真 TTY 且什么标记都没有：走 _win_vt_ok()。管道下它必须不探控制台。
+    with fake_env({}, False, "nt"):
+        check(rd._win_vt_ok() is False, "管道下 _win_vt_ok 应直接 False，不碰 SetConsoleMode")
+    check(hasattr(rd._win_vt_ok, "cache_clear"),
+          "_win_vt_ok 必须带 lru_cache：SetConsoleMode 有副作用，不能每次 bg() 都探")
+    # Windows 真 TTY、什么标记都没有：TERM 空不能直接 none，要问 _win_vt_ok。
+    # 替换函数本身，避免测试去动真控制台。
+    saved_vt = rd._win_vt_ok
+    try:
+        rd._win_vt_ok = lambda: True  # noqa: E731
+        with fake_env({}, True, "nt"):
+            check(rd.color_mode() == "truecolor",
+                  "Windows 空 TERM + VT 可用 → truecolor，不能因 TERM 空掉到 none")
+        rd._win_vt_ok = lambda: False  # noqa: E731
+        with fake_env({}, True, "nt"):
+            check(rd.color_mode() == "none",
+                  "Windows 空 TERM + VT 不可用 → none")
+    finally:
+        rd._win_vt_ok = saved_vt
+        rd._win_vt_ok.cache_clear()
+
+    # ---- 256 量化：预建 240 格按 ΔE2000 最近邻，不是 round(x/255*5) 反推
+    check(len(rd._XTERM_256) == 240, f"应预建 240 格，实得 {len(rd._XTERM_256)}")
+    check(rd._rgb_to_256(255, 0, 0) == 196, f"纯红应是 196，实得 {rd._rgb_to_256(255, 0, 0)}")
+    check(rd._rgb_to_256(0, 0, 0) == 16, f"纯黑应是 16，实得 {rd._rgb_to_256(0, 0, 0)}")
+    check(rd._rgb_to_256(255, 255, 255) == 231,
+          f"纯白应是 231，实得 {rd._rgb_to_256(255, 255, 255)}")
+    # 128 不在立方级阶 [0,95,135,175,215,255] 上：老式 round(128/255*5)=3 会推成 135 的格子，
+    # 而灰阶里 128 只差 2。这条是「反推」与「最近邻」的分水岭。
+    check(rd._rgb_to_256(128, 128, 128) == 244,
+          f"中灰应落灰阶 244，实得 {rd._rgb_to_256(128, 128, 128)}")
+    check(rd._rgb_to_256(0, 95, 135) == 24, f"立方角点应精确命中 24，实得 {rd._rgb_to_256(0, 95, 135)}")
+    for hexv in ("#f7f4ed", "#495c69", "#f43e06", "#a61b29", "#fcc307"):
+        rgb = ck.hex_to_rgb(hexv)
+        lab = ck.rgb_to_lab(rgb)
+        best = min(rd._XTERM_256, key=lambda cell: ck.delta_e_2000(lab, cell[1]))[0]
+        check(rd._rgb_to_256(*rgb) == best,
+              f"{hexv} 应取 ΔE2000 最近的 {best}，实得 {rd._rgb_to_256(*rgb)}")
+    check(hasattr(rd._rgb_to_256, "cache_info"), "_rgb_to_256 要缓存，否则每格都重算 240 次 ΔE")
+
+    # ---- 遗留代码页兜底：cp936 编不出 █，写出前必须退到 ASCII
+    import types
+    old_sys = rd.sys
+    try:
+        for enc, want_first in (("utf-8", "█"), (None, "█"), ("cp936", "#"), ("ascii", "#")):
+            rd.sys = types.SimpleNamespace(
+                stdout=type("S", (), {"encoding": enc, "isatty": lambda self: False})())
+            check(rd._blocks()[0] == want_first,
+                  f"stdout.encoding={enc} 时首格应是 {want_first}，实得 {rd._blocks()[0]}")
+            check(len(set(rd._blocks())) == 3, f"encoding={enc} 的兜底也要三级密度")
+    finally:
+        rd.sys = old_sys
+
+    # ---- swatch/ladder 已删：全库只有 render 自己的 __main__ 在用
+    check(not hasattr(rd, "swatch") and not hasattr(rd, "ladder"),
+          "swatch/ladder 是死代码，应已删除")
+    check(rd.bg("#f7f4ed", "none") == "" and rd.fg("#f7f4ed", "none") == "",
+          "none 档的 bg/fg 仍应返回空串")
+
+    test_render_pipe()
+
+
+def test_render_pipe() -> None:
+    """真跑一次宿主的默认环境：NO_COLOR=1 且 stdout 是管道。"""
+    import subprocess
+    import itertools
+    script = str(ROOT / "scripts" / "palette.py")
+    env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8", NO_COLOR="1")
+    r = subprocess.run([sys.executable, script, "ask", "茶叶小店的网站，安静一点", "--n", "1"],
+                       capture_output=True, text=True, encoding="utf-8", env=env, cwd=str(ROOT))
+    check(r.returncode == 0, f"NO_COLOR 管道下 ask 应正常退出，实得 {r.returncode}")
+    check("\033" not in r.stdout, "管道输出不许含 ESC 转义——它会变成上下文里的垃圾")
+    check("█" in r.stdout, "NO_COLOR + 管道下必须仍画出方块条（宿主的默认路径）")
+    bar = next((ln for ln in r.stdout.splitlines() if ln.startswith("█")), "")
+    runs = [len(list(g)) for _, g in itertools.groupby(bar)]
+    check(len(runs) == 3 and runs[0] > runs[1] > runs[2],
+          f"三段宽度必须底>块>点，实得 {runs}")
+    check(sum(runs) == 54, f"方块条总宽应 54，实得 {sum(runs)}")
+    check(r.stdout.count("约 ") == 3,
+          f"「约 N%」只该出现在落位三行，实得 {r.stdout.count('约 ')} 次")
+    from vernacular import Vernacular
+    leaked = Vernacular().check_plain(r.stdout)
+    check(not leaked, f"带方块条的 ask 输出仍不许泄露术语，实得 {leaked}")
+
+
 def test_dark_ground() -> None:
     """暗色的场必须是安静的深色，不能塌成紫黑。"""
     from engine import DARK_GROUND_MAX_C, DARK_GROUND_MAX_L
@@ -1186,6 +1398,7 @@ def main() -> int:
     test_ornament_handoff()
     test_documented_commands()
     test_plain_output()
+    test_render()
     test_doc_numbers()
     total = PASSES + len(FAILS)  # 必须在文档校验之前快照：那一步自己会追加失败
     check_doc_assertion_count(total)
