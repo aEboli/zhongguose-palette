@@ -77,7 +77,7 @@ $ python scripts/palette.py ask "茶叶小店的网站，安静一点"
 - **别名解析**：石青、玄色、胭脂、竹青、天青、黛、漆黑、墨色、中国红…告诉你库内对应哪一色
 - **28 个纹样点缀**：梅兰竹菊莲、远山水纹、回纹冰裂锦地、卷草藻井团花——借已有颜色画，不占配比
 - **交接合同**：一条命令产出 `handoff.json` + `palette.css`，供其他设计技能读
-- **1832 项回归测试**：色彩数学、色库完整性、白话映射、术语泄露、对比度闸门
+- **2112 项回归测试**：色彩数学、色库完整性、白话映射、术语泄露、对比度闸门
 
 ---
 
@@ -185,7 +185,9 @@ set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 ```
 
-终端色条需要 24 位真彩支持。不想要色条加 `--no-bar`；`NO_COLOR=1` 会全局关掉颜色。
+色条永远画得出来：真 TTY 且终端支持时铺 24 位真彩色块，其余环境（Claude Code 这类管道、
+`NO_COLOR=1`、cmd.exe）画 `█▓▒` 三级密度的方块条，宽度一样按真实建议铺色面积等比。
+想强开真彩加 `FORCE_COLOR=1`；不想要条加 `--no-bar`；`NO_COLOR=1` 只关 ANSI，不关方块条。
 
 ### 只要色库，不要技能
 
@@ -224,7 +226,7 @@ python scripts/palette.py ask "岁末的活动页，加点荷花"
 | --- | --- |
 | `--n <数>` | 给几套，默认 2 |
 | `--css` | 附 CSS 变量块 |
-| `--no-bar` | 不画色条（写文件、CI、或终端不支持真彩时用） |
+| `--no-bar` | 不画色条（写文件、CI、或只要那三行落位时用；终端不支持真彩不需要它，会自动画方块条） |
 
 脚本先回读一行 `解读:`，说明它把这句话理解成了什么；有没听懂的词会单独报一行 `没接住:`，不会假装听懂。
 
@@ -402,7 +404,7 @@ python scripts/selftest.py
 ```
 
 `preview` 产出的 HTML 里色条按真实建议铺色面积等比画（不是硬编码的 6/3/1）。
-`selftest.py` 应输出「全部通过」，共 1832 项断言。改分类、评分或白话词表后必须跑通。
+`selftest.py` 应输出「全部通过」，共 2112 项断言。改分类、评分或白话词表后必须跑通。
 
 ### 命令总表
 
@@ -776,14 +778,14 @@ zhongguose-palette/
 └── scripts/
     ├── palette.py               CLI（ask / resolve / tweak / pick / motifs / snap / search / info / generate / complete / preview）
     ├── vernacular.py            白话解析器
-    ├── render.py                ANSI 面积等比色条
+    ├── render.py                面积等比色条（真彩色块 / Unicode 方块）
     ├── handoff.py               交接文件生成
     ├── engine.py                检索、评分、生成、token、family lock、cliché
     ├── colorkit.py              sRGB / Lab / LCH / WCAG / APCA / CIEDE2000
     ├── taxonomy.py              色系、五行、四季、角色
     ├── build_catalog.py         从 source.json 重建色库
     ├── build_aliases.py         重建别名表
-    └── selftest.py              1832 项回归
+    └── selftest.py              2112 项回归
 ```
 
 ---

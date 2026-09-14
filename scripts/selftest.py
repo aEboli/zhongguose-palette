@@ -97,7 +97,17 @@ def test_aliases() -> None:
 
 def test_curated() -> None:
     cat = Catalog()
-    check(len(cat.curated) >= 18, f"手选方案 ≥18，实际 {len(cat.curated)}")
+    check(len(cat.curated) >= 21, f"手选方案 ≥21，实际 {len(cat.curated)}")
+    names = {e["name"] for e in cat.curated}
+    # 三套「以彩为地」的手选：与各自的纸地读法并列，不是替代
+    for nm, ground in (("宫墙压境", "苋菜红"), ("莫高土壁", "赭石"), ("蓝釉为地", "景泰蓝")):
+        check(nm in names, f"手选应含「{nm}」")
+        e = next(x for x in cat.curated if x["name"] == nm)
+        check(e["dominant"] == ground, f"{nm} 的底应是 {ground}，实得 {e['dominant']}")
+        check("彩底" in cat.by_name[ground].roles, f"{nm} 的底 {ground} 必须是彩底")
+    # 旧的纸地读法一套都不许被顶掉
+    for nm in ("紫禁朱墙", "景泰蓝铜"):
+        check(nm in names, f"旧读法「{nm}」必须还在——两种读法并列，不是替代")
     scores = []
     for e in cat.curated:
         for k in ("dominant", "secondary", "accent"):
@@ -112,10 +122,82 @@ def test_curated() -> None:
     check(clash["total"] < 75, f"青间紫应低分，实际 {clash['total']}")
 
 
+def test_chroma_ground() -> None:
+    """彩底：深而彩的矿物色可以整片铺开，红墙是主场而不是 16% 的一块。
+
+    这里锁三件事，缺任何一件「气势」都会悄悄退回纸地：
+    1. 角色切得对——苋菜红/赭石/景泰蓝进，朱红/银朱/大红（白字 3.6~3.8）不进；
+    2. 算法路径真的出得来——不只手选方案里有；
+    3. 雅/清冷/空灵/古朴 一套都不许翻成彩底，缺省读法不变。
+    """
+    from engine import can_ground, complete_pair, wants_chroma_ground
+    cat = Catalog()
+    cb = [c for c in cat.colors if "彩底" in c.roles]
+    check(len(cb) >= 40, f"彩底池 ≥40，实际 {len(cb)}")
+    for c in cb:
+        check(c.C >= 40, f"彩底 {c.name} C={c.C:.1f} 必须 ≥40")
+        check(c.contrast_white >= 4.5,
+              f"彩底 {c.name} 白字 {c.contrast_white:.2f}:1 必须 ≥4.5——铺满了写不上字就不是底")
+        # 白字 4.5 的门槛已隐含「不是中调」。这条把结论钉住：一旦有彩底 L*>52
+        # 冒出来，说明 contrast_white 的算法或色库变了，得回来重看判据。
+        check(c.L <= 52, f"彩底 {c.name} L*={c.L:.1f} 应 ≤52（白字门槛的推论）")
+    for n in ("苋菜红", "赭石", "景泰蓝", "群青", "殷红"):
+        check("彩底" in cat.by_name[n].roles, f"{n} 应是彩底：深而彩的矿物色，本来就整片铺")
+    for n in ("朱红", "银朱", "大红"):
+        c = cat.by_name[n]
+        check("彩底" not in c.roles,
+              f"{n} 白字仅 {c.contrast_white:.2f}:1，不许进彩底——铺成底就没有能写正文的色")
+        check(not can_ground(cat, c), f"{n} 是中调高彩（L*{c.L:.0f} C{c.C:.0f}），can_ground 应为假")
+    for n in ("苋菜红", "赭石", "景泰蓝", "汉白玉", "月白"):
+        check(can_ground(cat, n and cat.by_name[n]), f"{n} 应能做底")
+
+    # 算法路径：故宫 n=5 里至少一套底是 C>=40 的深彩色。
+    # 这条是整个改动的验收——手选方案里有红底不算，用户换个说法就见不到了。
+    pals = generate(cat, scene="故宫", n=5)
+    hot = [p for p in pals if p.dominant.C >= 40]
+    check(hot, "故宫 n=5 至少一套底 C≥40，否则「宫墙为局」只存在于手选里，"
+               f"实得底 {[(p.dominant.name, round(p.dominant.C)) for p in pals]}")
+    check(any("彩底" in p.dominant.roles for p in pals), "故宫 n=5 至少一套底是彩底")
+    # 前两位仍是素底：彩底是第二读法，不是新的缺省
+    check(all("彩底" not in p.dominant.roles for p in pals[:2]),
+          f"前两套应仍是素底，实得 {[p.dominant.name for p in pals[:2]]}")
+
+    # 静的四档一套都不许出彩底。满天星紫/石竹紫 同时是 深底 与 彩底，
+    # 会靠 深底 合法进 古朴 的池——若「留名额」按颜色标签判而不按 dom 判，
+    # 古朴 就会被连坐：84.6 分的紫底顶到第三位，挤掉 89.5 分的可可棕。
+    for mood in ("雅", "清冷", "空灵", "古朴"):
+        check(not wants_chroma_ground(mood), f"{mood} 的 dom 里没有彩底，不该留名额")
+        for dark in (False, True):
+            got = generate(cat, mood=mood, n=6, dark=dark)
+            bad = [p.dominant.name for p in got if "彩底" in p.dominant.roles]
+            check(not bad, f"{mood} dark={dark} 不许出彩底做底，实得 {bad}")
+    for mood in ("艳", "浓烈", "市井"):
+        check(wants_chroma_ground(mood), f"{mood} 的 dom 里有彩底，应留名额")
+        got = generate(cat, mood=mood, n=5)
+        check(any("彩底" in p.dominant.roles for p in got),
+              f"{mood} n=5 应有一套彩底做底，实得 {[p.dominant.name for p in got]}")
+    check(not wants_chroma_ground("艳", dark=True),
+          "dark 走 (深底, 墨色)、不读 dom，深色方案由深底承担，不另留彩底名额")
+
+    # complete 两种读法并列
+    pair = complete_pair(cat, "苋菜红", "汉白玉", mood="艳")
+    doms = {p.dominant.name for p in pair}
+    check("汉白玉" in doms and "苋菜红" in doms,
+          f"complete(苋菜红,汉白玉) 应同时给白地与红地两种读法，实得 {doms}")
+    check(len(pair) == 6, f"两种读法各留 3 套，共 6 条，实得 {len(pair)}")
+    check(all("彩底" not in p.dominant.roles for p in pair[:3]),
+          "素底读法排在前，彩底读法在后")
+    # 翻不过来的就只给一种，不许硬凑第二种
+    zh = complete_pair(cat, "朱红", "汉白玉", mood="艳")
+    zh_doms = {p.dominant.name for p in zh}
+    check(zh_doms == {"汉白玉"},
+          f"朱红 不能做底，complete 只该出白地一种读法，实得 {zh_doms}")
+
+
 def test_generate() -> None:
     cat = Catalog()
     for scene, must_have in [
-        ("故宫", {"汉白玉", "酪黄", "朱红", "姜黄", "银朱", "茶褐"}),
+        ("故宫", {"汉白玉", "酪黄", "朱红", "姜黄", "银朱", "茶褐", "苋菜红", "金盏黄"}),
         ("青花", {"雪白", "群青", "鷃蓝"}),
         ("水墨", {"鱼肚白", "汉白玉", "战舰灰", "银朱", "苋菜红"}),
     ]:
@@ -271,6 +353,78 @@ def test_vernacular() -> None:
             axes[axis] += 1
     for axis, hit in axes.items():
         check(hit >= 8, f"{axis} 轴至少 8 个线索词被用例覆盖，实际 {hit}")
+
+
+def test_tweak_moods() -> None:
+    """微调的终点。两族词的去处与起点无关，逐档爬到不了，所以单独锁。
+
+    louder_map 只认当前档位，不认用户说了哪个词。这对「太素了」够用，
+    对整族有固定去处的词不够：「不够气派」从雅爬一格只到艳（要的是压得住），
+    「更喜庆」从艳爬一格会到浓烈（要的是红配绿的市井）。louder_to 写死这两族
+    的终点，先于 louder_map。反过来不能把终点塞回 louder_map——那会连坐同档位
+    的其他词，「太素了，再艳一点」会得到更旧更沉的一路，正是 map_note 要避开的错。
+    """
+    from vernacular import Vernacular
+    v = Vernacular()
+    cfg = v.data["tweak"]
+    to = cfg.get("louder_to") or {}
+    check(to, "tweak.louder_to 必须存在：没有它，整族固定终点的词只能靠改 louder_map，"
+              "而那会连坐同档位的其他词")
+    for dest, words in to.items():
+        check(dest in cfg["louder_map"],
+              f"louder_to 的终点「{dest}」必须是真档位（louder_map 的键之一）")
+        for w in words:
+            check(w in cfg["louder"], f"louder_to 里的「{w}」也必须在 louder 里，"
+                                      "否则 hit('louder') 不成立，这一族根本不触发")
+
+    # 气势族：任何起点都直落浓烈。原报告的症状就是它从雅只走到艳。
+    for cur in ("空灵", "清冷", "雅", "古朴", "艳", "市井"):
+        got = v.tweak("不够有气势，撑不住场", cur)["mood"]
+        check(got == "浓烈", f"气势族抱怨从 {cur} 出发应落浓烈，实得 {got}")
+    top = v.tweak("不够有气势，撑不住场", "浓烈")
+    check(top["mood"] == "浓烈" and not top["actions"] and top["note"],
+          f"浓烈已是气势族的顶，应只出提示不出动作，实得 {top['actions']} / {top['note']}")
+
+    # 喜庆族：任何起点都落市井，不是浓烈。市井只从这一路进（tweaks.md 那一行）。
+    for txt in ("更喜庆", "要年味", "更喜庆一点"):
+        for cur in ("雅", "艳", "浓烈"):
+            got = v.tweak(txt, cur)["mood"]
+            check(got == "市井", f"「{txt}」从 {cur} 出发应落市井，实得 {got}——"
+                                 "把要红配绿的人送进浓烈是给了他没要的东西")
+    check(v.tweak("更喜庆", "市井")["mood"] == "市井", "市井已是喜庆族的顶")
+
+    # 素艳轴逐档爬的老行为一条都不许被上面两族连坐
+    for txt, cur, want in (("太素了，再艳一点", "雅", "艳"), ("太素", "空灵", "雅"),
+                           ("太素", "清冷", "艳"), ("太素", "古朴", "浓烈"),
+                           ("太素", "艳", "浓烈"), ("太艳", "艳", "雅"),
+                           ("太重", "浓烈", "古朴"), ("太艳", "市井", "艳"),
+                           ("太艳", "古朴", "雅")):
+        got = v.tweak(txt, cur)["mood"]
+        check(got == want, f"「{txt}」从 {cur} 出发应到 {want}，实得 {got}")
+
+    # 带抱怨标记的词绝不进 in.mood：「不够气派」在首轮会被读成「要气派」，词义正好反。
+    # 不带标记的方向词（更喜庆、年味、热闹一点）两处同义，允许两边都在——
+    # 但两边指的必须是同一个终点，否则首轮和改稿会把同一句话送去两个地方。
+    MARKS = ("不够", "太", "没", "寡", "闷")
+    mood_words = {w for axis, _val, w, _wt in v.cues if axis == "mood"}
+    complaints = [w for w in cfg["louder"] + cfg["quieter"] if any(m in w for m in MARKS)]
+    check(len(complaints) >= 15, f"抱怨词该占多数，实得 {len(complaints)} 条")
+    leaked = [w for w in complaints if w in mood_words]
+    check(not leaked, f"带抱怨标记的词不许出现在 in.mood 里，实得 {leaked}——"
+                      "首轮会把「不够气派」读成「要气派」，词义反过来")
+    for w in cfg["louder"]:
+        if w in mood_words:
+            dest = next((d for d, ws in to.items() if w in ws), None)
+            axis_moods = {val for axis, val, word, _wt in v.cues
+                          if axis == "mood" and word == w}
+            check(dest in axis_moods,
+                  f"「{w}」两表都在，首轮落 {axis_moods} 而改稿落 {dest}——"
+                  "同一句话被送去两个地方，必须对齐")
+
+    # louder 与 quieter 不许互为子串：一句话同时命中两边会被当成没说
+    clash = [(a, b) for a in cfg["louder"] for b in cfg["quieter"]
+             if a in b or b in a]
+    check(not clash, f"louder 与 quieter 互为子串会误触成「方向冲突」，实得 {clash}")
 
 
 def test_unheard() -> None:
@@ -1010,7 +1164,9 @@ def test_render() -> None:
     check(len(bar) == 54, f"方块条总宽应是 54，实得 {len(bar)}")
     check("▌" not in blk and "│" not in blk,
           "块间不许加分隔符：它吃掉 1 格宽度，点缀只有 2 格时比例直接崩")
-    check("%" not in blk and "#" not in blk and "约" not in blk,
+    # 判 hex 要用模式而不是裸 "#"：遗留代码页下方块自己就退成了 "#"（_BLOCKS_ASCII），
+    # 拿裸字符判会让兜底一生效就自己报错——不设 PYTHONUTF8 时 stdout 是 gbk，这条真的红。
+    check(not re.search(r"#[0-9a-fA-F]{6}", blk) and "%" not in blk and "约" not in blk,
           "方块档不许再打「底 #hex 约 N%」——那与落位三行重复")
     for label in ("底", "块", "点"):
         check(label in legend, f"方块档 legend 必须保留「{label}」标签")
@@ -1384,9 +1540,11 @@ def main() -> int:
     test_catalog()
     test_aliases()
     test_curated()
+    test_chroma_ground()
     test_generate()
     test_tokens()
     test_vernacular()
+    test_tweak_moods()
     test_unheard()
     test_airy_areas()
     test_gold_names()

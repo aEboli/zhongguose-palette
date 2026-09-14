@@ -23,7 +23,7 @@ python --version          # 应 ≥ 3.10
 python scripts/selftest.py   # 应输出「全部通过」
 ```
 
-`selftest.py` 共 1832 项断言，覆盖色彩数学、色库完整性、别名文化校正、白话映射、
+`selftest.py` 共 2112 项断言，覆盖色彩数学、色库完整性、别名文化校正、白话映射、
 术语泄露、对比度闸门、暗底安全区、交接文件字段、README 里写出来的每条命令。
 跑一次约需 1~2 分钟（其中一组会真的启动子进程跑 CLI）。
 
@@ -205,10 +205,18 @@ set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 ```
 
-### 色条显示成乱码或方块
+### 色条是方块而不是彩色
 
-终端不支持 24 位真彩。加 `--no-bar` 关掉色条，或设 `NO_COLOR=1` 全局关闭颜色。
-脚本会自动降级到 256 色，再降到无色表格。
+这是正常的，不是坏了。Claude Code 里工具输出进的是模型上下文而不是你的终端，那种环境
+（stdout 是管道，或设了 `NO_COLOR=1`）画的是 `█▓▒` 三级密度方块条——宽度照样按真实建议
+铺色面积等比，模型能原样念给你听。
+
+要真彩色块：在真终端里跑，或加 `FORCE_COLOR=1`。要给人看的彩色图：`preview --out xx.html`。
+Windows Terminal / ConEmu / VSCode 终端自动认真彩；ANSICON 只按 256 色走；
+cmd.exe 会探一次 VT，探不到就用方块条。
+
+方块真的显示成乱码（`?` 或竖条），是遗留代码页编不出 `█`：设 `PYTHONUTF8=1`，
+或不管它——脚本写出前会自己退到 `#+-` 的 ASCII 版。
 
 ### `--scene` 报 invalid choice
 

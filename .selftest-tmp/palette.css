@@ -1,0 +1,116 @@
+/* 中国传统色 · 由 zhongguose-palette 生成，色值全部来自 526 色库 */
+
+:root { color-scheme: light dark; }
+
+:root {
+  --color-bg: #f7f4ed;           /* 鱼肚白 yudubai */
+  --color-bg-rgb: 247, 244, 237;
+  --color-surface: #e4dfd7;           /* 珍珠灰 zhenzhuhui */
+  --color-surface-rgb: 228, 223, 215;
+  --color-text: #363433;           /* 长石灰 changshihui */
+  --color-text-rgb: 54, 52, 51;
+  --color-muted: #5d655f;           /* 狼烟灰 langyanhui */
+  --color-muted-rgb: 93, 101, 95;
+  --color-border: #dad4cb;           /* 浅灰 qianhui */
+  --color-border-rgb: 218, 212, 203;
+  --color-border-strong: #9a8878;           /* 海鸥灰 haiouhui */
+  --color-border-strong-rgb: 154, 136, 120;
+  --color-secondary: #495c69;           /* 战舰灰 zhanjianhui */
+  --color-secondary-rgb: 73, 92, 105;
+  --color-accent: #918072;           /* 银灰 yinhui */
+  --color-accent-rgb: 145, 128, 114;
+  --color-accent-fg: #131824;           /* 燕颔蓝 yanhanlan */
+  --color-accent-fg-rgb: 19, 24, 36;
+  --color-accent-hover: #8a988e;           /* 明灰 minghui */
+  --color-accent-hover-rgb: 138, 152, 142;
+  --color-accent-active: #b89485;           /* 淡玫瑰灰 danmeiguihui */
+  --color-accent-active-rgb: 184, 148, 133;
+  --color-success: #20a162;           /* 翠绿 cuilv */
+  --color-success-rgb: 32, 161, 98;
+  --color-warning: #815f25;           /* 莱阳梨黄 laiyanglihuang */
+  --color-warning-rgb: 129, 95, 37;
+  --color-error: #f43e06;           /* 银朱 yinzhu */
+  --color-error-rgb: 244, 62, 6;
+  --color-info: #0f59a4;           /* 飞燕草蓝 feiyancaolan */
+  --color-info-rgb: 15, 89, 164;
+  --color-disabled: #c0c4c3;           /* 月影白 yueyingbai */
+  --color-disabled-rgb: 192, 196, 195;
+  --color-ring: #918072;           /* 银灰 yinhui */
+  --color-ring-rgb: 145, 128, 114;
+}
+
+[data-theme="dark"] {
+  --color-bg: #36282b;           /* 苍蝇灰 cangyinghui */
+  --color-bg-rgb: 54, 40, 43;
+  --color-surface: #483332;           /* 海报灰 haibaohui */
+  --color-surface-rgb: 72, 51, 50;
+  --color-text: #f1f0ed;           /* 银白 yinbai */
+  --color-text-rgb: 241, 240, 237;
+  --color-muted: #9fa39a;           /* 镍灰 niehui */
+  --color-muted-rgb: 159, 163, 154;
+  --color-border: #4f383e;           /* 暮云灰 muyunhui */
+  --color-border-rgb: 79, 56, 62;
+  --color-border-strong: #7a7374;           /* 锌灰 xinhui */
+  --color-border-strong-rgb: 122, 115, 116;
+  --color-secondary: #856d72;           /* 芦灰 luhui */
+  --color-secondary-rgb: 133, 109, 114;
+  --color-accent: #856d72;           /* 芦灰 luhui */
+  --color-accent-rgb: 133, 109, 114;
+  --color-accent-fg: #fffefa;           /* 海参灰 haishenhui */
+  --color-accent-fg-rgb: 255, 254, 250;
+  --color-accent-hover: #70887d;           /* 淡绿灰 danlvhui */
+  --color-accent-hover-rgb: 112, 136, 125;
+  --color-accent-active: #9a8878;           /* 海鸥灰 haiouhui */
+  --color-accent-active-rgb: 154, 136, 120;
+  --color-success: #5bae23;           /* 鹦鹉绿 yingwulv */
+  --color-success-rgb: 91, 174, 35;
+  --color-warning: #ffd111;           /* 藤黄 tenghuang */
+  --color-warning-rgb: 255, 209, 17;
+  --color-error: #f43e06;           /* 银朱 yinzhu */
+  --color-error-rgb: 244, 62, 6;
+  --color-info: #1772b4;           /* 群青 qunqing */
+  --color-info-rgb: 23, 114, 180;
+  --color-disabled: #474b4c;           /* 黄昏灰 huanghunhui */
+  --color-disabled-rgb: 71, 75, 76;
+  --color-ring: #856d72;           /* 芦灰 luhui */
+  --color-ring-rgb: 133, 109, 114;
+}
+
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"]) {
+    --color-bg: #36282b;           /* 苍蝇灰 cangyinghui */
+    --color-bg-rgb: 54, 40, 43;
+    --color-surface: #483332;           /* 海报灰 haibaohui */
+    --color-surface-rgb: 72, 51, 50;
+    --color-text: #f1f0ed;           /* 银白 yinbai */
+    --color-text-rgb: 241, 240, 237;
+    --color-muted: #9fa39a;           /* 镍灰 niehui */
+    --color-muted-rgb: 159, 163, 154;
+    --color-border: #4f383e;           /* 暮云灰 muyunhui */
+    --color-border-rgb: 79, 56, 62;
+    --color-border-strong: #7a7374;           /* 锌灰 xinhui */
+    --color-border-strong-rgb: 122, 115, 116;
+    --color-secondary: #856d72;           /* 芦灰 luhui */
+    --color-secondary-rgb: 133, 109, 114;
+    --color-accent: #856d72;           /* 芦灰 luhui */
+    --color-accent-rgb: 133, 109, 114;
+    --color-accent-fg: #fffefa;           /* 海参灰 haishenhui */
+    --color-accent-fg-rgb: 255, 254, 250;
+    --color-accent-hover: #70887d;           /* 淡绿灰 danlvhui */
+    --color-accent-hover-rgb: 112, 136, 125;
+    --color-accent-active: #9a8878;           /* 海鸥灰 haiouhui */
+    --color-accent-active-rgb: 154, 136, 120;
+    --color-success: #5bae23;           /* 鹦鹉绿 yingwulv */
+    --color-success-rgb: 91, 174, 35;
+    --color-warning: #ffd111;           /* 藤黄 tenghuang */
+    --color-warning-rgb: 255, 209, 17;
+    --color-error: #f43e06;           /* 银朱 yinzhu */
+    --color-error-rgb: 244, 62, 6;
+    --color-info: #1772b4;           /* 群青 qunqing */
+    --color-info-rgb: 23, 114, 180;
+    --color-disabled: #474b4c;           /* 黄昏灰 huanghunhui */
+    --color-disabled-rgb: 71, 75, 76;
+    --color-ring: #856d72;           /* 芦灰 luhui */
+    --color-ring-rgb: 133, 109, 114;
+  }
+}

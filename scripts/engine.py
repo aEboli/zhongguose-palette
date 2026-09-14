@@ -66,7 +66,7 @@ MOODS = {
     "雅": dict(dom=("浅底", "纸感"), sec_chroma=(0, 28), acc_chroma=(18, 55),
               sec_tone=None, acc_tone=("中", "中深", "深"), allow_ke=False,
               prefer_temp="中性", note="低彩大面积，点缀也不过火，宋瓷、文人画气质"),
-    "艳": dict(dom=("浅底", "纸感", "面层"), sec_chroma=(18, 55), acc_chroma=(45, 999),
+    "艳": dict(dom=("浅底", "纸感", "面层", "彩底"), sec_chroma=(18, 55), acc_chroma=(45, 999),
               sec_tone=None, acc_tone=("中", "中浅", "中深"), allow_ke=True,
               prefer_temp="暖", note="宫廷、年画、漆器：点缀极彩，辅色也可稍艳"),
     "古朴": dict(dom=("面层", "描边", "深底"), sec_chroma=(8, 40), acc_chroma=(20, 70),
@@ -75,14 +75,14 @@ MOODS = {
     "清冷": dict(dom=("浅底", "纸感"), sec_chroma=(4, 30), acc_chroma=(14, 50),
                 sec_tone=None, acc_tone=("中", "中深"), allow_ke=False,
                 prefer_temp="冷", note="宋瓷天青、月白、花青，冷调低彩"),
-    "浓烈": dict(dom=("深底", "墨色"), sec_chroma=(10, 45), acc_chroma=(40, 999),
+    "浓烈": dict(dom=("深底", "墨色", "彩底"), sec_chroma=(10, 45), acc_chroma=(40, 999),
                 sec_tone=None, acc_tone=("中", "中浅", "中深"), allow_ke=True,
                 prefer_temp=None, note="敦煌、漆器：深底托高彩点缀"),
     "空灵": dict(dom=("浅底",), sec_chroma=(0, 18), acc_chroma=(8, 40),
                 sec_tone=("中深", "深", "极深"), acc_tone=("中深", "深", "极深"),
                 allow_ke=False, prefer_temp="中性",
                 note="水墨留白：主场几乎是纸，结构是墨，点缀是一枚印"),
-    "市井": dict(dom=("浅底", "纸感", "面层"), sec_chroma=(20, 60), acc_chroma=(45, 999),
+    "市井": dict(dom=("浅底", "纸感", "面层", "彩底"), sec_chroma=(20, 60), acc_chroma=(45, 999),
                 sec_tone=None, acc_tone=("中", "中浅"), allow_ke=True,
                 prefer_temp="暖", note="年画、门神：高对比、大红大绿可以相克"),
 }
@@ -94,10 +94,13 @@ MOODS = {
 # acc_hue 限定点缀的 LCH 色相区间。只限色系不够——"红"里既有朱红(H≈35)
 # 也有品红/紫荆红(H≈0 或 350+)，后者是化学染料的现代红，出现在故宫配色里立刻失真。
 SCENES = {
+    # 故宫有两种读法，并列而非主次：白石台基为局（汉白玉铺满、朱红成块），
+    # 或宫墙为局（苋菜红一类深彩红铺满、白字压上、金只走线）。dom_families 因此
+    # 必须含红——只留白黄，第二种读法根本进不了主场池。
     "故宫": dict(mood="艳", families=("红", "黄", "白"),
-               dom_families=("白", "黄"), accent_break=("红",),
+               dom_families=("白", "黄", "红"), accent_break=("红",),
                sec_hue=((20, 80), (70, 110)),  # 朱红/土黄，不要品红
-               acc_hue=((20, 70),), wuxing=("火", "土", "金"),
+               acc_hue=((20, 70), (70, 100)), wuxing=("火", "土", "金"),
                hint="朱红墙、琉璃黄瓦、汉白玉栏"),
     "青花": dict(mood="清冷", families=("蓝", "白", "青"), accent_break=(),
                wuxing=("水", "金", "木"), hint="甜白釉上的青花蓝，只有青与白"),
@@ -304,8 +307,14 @@ def score_trio(dom: Color, sec: Color, acc: Color, mood: str | None = None) -> d
     # 点缀既不比主色艳、也不比主色深浅分明 —— 真正的失败
     if acc.C <= dom.C + 3 and abs(acc.L - dom.L) < 12:
         parts["chroma_hierarchy"] *= 0.3
-    # 大面积高彩：主场是背景，铺高彩会视觉过载（深底方案除外，深底本就压得住）
-    if dom.C > 45 and "深底" not in dom.roles:
+    # 大面积高彩：主场是背景，铺高彩会视觉过载。两类例外：
+    # 深底本就压得住；彩底是「深而彩的矿物色」，红墙、土壁、蓝釉本来就是整片铺的，
+    # 白字压得住（contrast_white≥4.5）才拿到这个角色。
+    # 没有彩底豁免时，苋菜红宫墙被压到 chroma_hierarchy 0.392、总分 84.5，
+    # 而点缀几乎看不见的 汉白玉+朱红+姜黄（点缀对底仅 1.62:1）拿 93.1——
+    # 评分在系统性奖励看不见的点缀。豁免后宫墙升到约 93.1。
+    # 朱红/银朱/大红（中调高彩、白字 <4.5）拿不到彩底，仍被这条罚。
+    if dom.C > 45 and "深底" not in dom.roles and "彩底" not in dom.roles:
         parts["chroma_hierarchy"] *= 0.45
     # 辅色不该比点缀"更抢"：单位面积显著度上，点缀应强于结构
     sec_salience = max((sec.C - dom.C) / 55.0, abs(sec.L - dom.L) / 55.0)
@@ -445,6 +454,49 @@ def _has_role(c: Color, roles: tuple[str, ...] | None) -> bool:
     return any(r in c.roles for r in roles)
 
 
+def wants_chroma_ground(mood: str | None, dark: bool = False) -> bool:
+    """这一档氛围是否要「彩底为局」这条读法。
+
+    只认 MOODS[mood]['dom'] 里写没写彩底，不认颜色身上的角色标签。两者不等价：
+    满天星紫 同时是 深底 与 彩底，它靠 深底 合法进 古朴 的主场池，但 古朴 的 dom
+    里没有彩底——按标签判会让「留名额」和「彩底名额」在 古朴 上生效，把 84.6 分的
+    紫底顶到第三位、挤掉 89.5 分的可可棕。雅/清冷/空灵 的池里没有彩底，按标签判
+    恰好也是空操作，于是这个错只在 古朴 上露头。
+    dark 走的是 (深底, 墨色)，不读 dom，深色方案本就由深底承担，不另留名额。
+    """
+    if dark:
+        return False
+    return "彩底" in (MOODS.get(mood or "", {}).get("dom") or ())
+
+
+def _reserve_ground(pool: list[Color], limit: int, keep: int = 3) -> list[Color]:
+    """截断主场池时给彩底留名额。
+
+    单纯 `pool[:limit]` 会把彩底整个切掉——素底池通常远超 limit，而彩底按
+    _ground_tier 排在它们之后。切掉之后「宫墙为局」只能靠手选方案存在，
+    算法路径永远出不来，用户换个说法就再也见不到红底。
+    """
+    plain = [c for c in pool if _ground_tier(c) == 0]
+    chromatic = [c for c in pool if _ground_tier(c) == 1]
+    if not chromatic:
+        return pool[:limit]
+    # 彩底内部不按冷暖排——冷暖会把 夕阳红（白字仅 4.72:1）顶到 苋菜红 前面，
+    # 而红墙的活儿是承住白字。先要留出余量（白字 ≥6:1），再要够彩。
+    chromatic.sort(key=lambda c: (0 if c.contrast_white >= 6.0 else 1, -c.C))
+    head = plain[:max(limit - keep, 1)]
+    return head + chromatic[:keep]
+
+
+def _ground_tier(c: Color) -> int:
+    """素底 0、彩底 1。素底仍是缺省读法，彩底是第二读法。
+
+    只当排序键的第一档，不做过滤：不压这一档的话，「艳 + 偏暖」会让落霞红、
+    夕阳红一类把 doms[:12] 顶满，缺省行为从纸地变成红墙，那是把一个默认换成
+    另一个默认，不是并列两种读法。
+    """
+    return 1 if "彩底" in c.roles else 0
+
+
 def dominant_pool(cat: Catalog, mood: str | None = None, seed: Color | None = None,
                   families: tuple[str, ...] | None = None, dark: bool = False) -> list[Color]:
     """主场候选：大面积必须安静。深色氛围走深底，其余走浅底/纸感。
@@ -454,6 +506,7 @@ def dominant_pool(cat: Catalog, mood: str | None = None, seed: Color | None = No
     """
     cfg = MOODS.get(mood or "", {})
     roles = ("深底", "墨色") if dark else cfg.get("dom")
+    reserve = wants_chroma_ground(mood, dark)
     pool = [c for c in cat.colors if _has_role(c, roles)]
     if not pool:
         pool = [c for c in cat.colors if "纸感" in c.roles or "浅底" in c.roles or "深底" in c.roles]
@@ -465,10 +518,16 @@ def dominant_pool(cat: Catalog, mood: str | None = None, seed: Color | None = No
         if narrowed:
             pool = narrowed
     prefer = cfg.get("prefer_temp")
+    # 彩底压到排序末档，只在这一档真的要彩底时做——否则 古朴 的池会被连坐：
+    # 石竹紫 同时是 深底 与 彩底，靠 深底 合法进池，压到末档后整池前移一位，
+    # 暗驼棕 从第 13 位挤进 doms[:12]，古朴 的出色顺序无端改了。
+    tier = _ground_tier if reserve else (lambda c: 0)
     if prefer == "冷":
-        pool = sorted(pool, key=lambda c: c.warmth)
+        pool = sorted(pool, key=lambda c: (tier(c), c.warmth))
     elif prefer == "暖":
-        pool = sorted(pool, key=lambda c: -c.warmth)
+        pool = sorted(pool, key=lambda c: (tier(c), -c.warmth))
+    elif reserve:
+        pool = sorted(pool, key=tier)
     if dark:
         # 深底要的是「安静的深」，不是「全库最深」。按 (L, C) 排序会把
         # 深牵牛紫 #1c0d1a（L*6、紫）顶到第一位，于是 雅/清冷/空灵 加 --dark
@@ -482,9 +541,13 @@ def dominant_pool(cat: Catalog, mood: str | None = None, seed: Color | None = No
             return [seed] + [c for c in pool if c.name != seed.name][:24]
         undertone = [c for c in pool if (c.warmth * seed.warmth) >= 0 or abs(c.warmth) < 0.2]
         target_l = 12.0 if dark else (100.0 if seed.L < 50 else 0.0)
-        undertone.sort(key=lambda c: abs(c.H - seed.H) if min(c.C, seed.C) > 8 else abs(c.L - target_l))
-        return undertone[:28] or pool[:28]
-    return pool[:40]
+        undertone.sort(key=lambda c: (tier(c),
+                                      abs(c.H - seed.H) if min(c.C, seed.C) > 8
+                                      else abs(c.L - target_l)))
+        if not reserve:
+            return undertone[:28] or pool[:28]
+        return _reserve_ground(undertone, 28) or _reserve_ground(pool, 28)
+    return _reserve_ground(pool, 40) if reserve else pool[:40]
 
 
 def secondary_pool(cat: Catalog, dom: Color, mood: str | None = None,
@@ -699,7 +762,22 @@ def generate(cat: Catalog, mood: str | None = None, scene: str | None = None,
     results: list[Palette] = []
     seen: set[tuple[str, str, str]] = set()
 
-    for dom in doms[:12]:
+    # 主场头部：素底占满 12 个名额后，再给彩底留 2 个。
+    # 单靠排序键不够——素底池通常远超 12 个（艳 + 白黄红 有 39 个），彩底会被整个
+    # 挤出头部，「宫墙为局」这条读法就只能靠手选方案存在，算法永远出不来。
+    # 反过来若不压素底名额，缺省行为会从纸地翻成红墙。两条都要，所以分名额而不是分池。
+    # 只在这一档氛围真的要彩底时分名额（wants_chroma_ground 读 dom，不读颜色标签）。
+    reserve_chroma = wants_chroma_ground(mood, dark)
+    if reserve_chroma:
+        head = [c for c in doms if _ground_tier(c) == 0][:12]
+        if not head:
+            head = doms[:12]
+        taken = {c.name for c in head}
+        head += [c for c in doms if _ground_tier(c) == 1 and c.name not in taken][:2]
+    else:
+        head = doms[:12]
+
+    for dom in head:
         secs = [pinned["secondary"]] if pinned.get("secondary") else secondary_pool(cat, dom, mood, families, scene)
         for sec in secs[:8]:
             if sec.name == dom.name:
@@ -731,7 +809,16 @@ def generate(cat: Catalog, mood: str | None = None, scene: str | None = None,
     if pinned:
         curated = [p for p in curated
                    if all(getattr(p, r).name == c.name for r, c in pinned.items())]
-    for p in curated + results:
+    ordered = curated + results
+
+    def admissible(p: Palette) -> bool:
+        if not media_cfg.get("need_text"):
+            return True
+        need = media_cfg.get("min_text_ratio") or 4.5
+        text = pick_text(cat, p.dominant, min_ratio=need)
+        return contrast(text, p.dominant) >= need
+
+    for p in ordered:
         p.dark = dark
         p.media = media
         if media:
@@ -744,20 +831,61 @@ def generate(cat: Catalog, mood: str | None = None, scene: str | None = None,
             continue
         if acc_count.get(p.accent.name, 0) >= 3:
             continue
-        if media_cfg.get("need_text"):
-            text = pick_text(cat, p.dominant, min_ratio=media_cfg.get("min_text_ratio") or 4.5)
-            if contrast(text, p.dominant) < (media_cfg.get("min_text_ratio") or 4.5):
-                continue
+        if not admissible(p):
+            continue
         picked.append(p)
         dom_count[p.dominant.name] = dom_count.get(p.dominant.name, 0) + 1
         acc_count[p.accent.name] = acc_count.get(p.accent.name, 0) + 1
         if len(picked) >= n:
             break
+    # 彩底名额：n 套里给「彩底为局」留一套。
+    # 纯按分排永远轮不到它——苋菜红宫墙最高 93.5，而同场景的浅底方案能到 95.7，
+    # 差距来自评分现在还在奖励看不见的点缀（点缀对底 1.62:1 也不扣分，那条改写是另案）。
+    # 没有这个名额，「两种读法并列」在代码里成立、在用户看到的 n 套里不成立。
+    # 只留一套：素底仍是缺省，彩底是第二读法，不是新的默认。
+    if (reserve_chroma and n >= 2
+            and not any("彩底" in p.dominant.roles for p in picked)):
+        alt = next((p for p in ordered
+                    if "彩底" in p.dominant.roles
+                    and not any((q.dominant.name, q.secondary.name, q.accent.name)
+                                == (p.dominant.name, p.secondary.name, p.accent.name)
+                                for q in picked)
+                    and admissible(p)), None)
+        if alt is not None:
+            # 插在第三位，不是追加在末尾。调用方常取 generate(n+2) 再自己截断
+            # （palette.py 的 ask 就是这么做的），追加在末尾的那一套正好被截掉——
+            # 名额留了，用户还是看不到。前两位仍是素底，缺省读法不变。
+            slot = min(2, len(picked))
+            if len(picked) >= n:
+                picked.pop()
+            picked.insert(slot, alt)
     return picked
 
 
+def can_ground(cat: Catalog, c: Color) -> bool:
+    """这一色能不能当 UI 的底。
+
+    两条都要满足：
+    1. 底上得能写正文——但正文必须来自**墨色池或纸感池**，不是全库任意一色。
+       全库任取时，526 色对某库内色的最佳对比几乎全都过 4.5，这条等于没写。
+    2. 不是中调高彩（52 < L* < 78 且 C > 45）。朱红/银朱/大红正落在这里：
+       它们白字只有 3.6~3.8，黑字也不够，铺成底就没有能写字的正文色，只能做大字。
+    """
+    if 52 < c.L < 78 and c.C > 45:
+        return False
+    pool = [x for x in cat.colors
+            if ("墨色" in x.roles or "纸感" in x.roles) and contrast(x, c) >= 4.5]
+    return bool(pool)
+
+
 def complete_pair(cat: Catalog, a: str | Color, b: str | Color, mood: str | None = None) -> list[Palette]:
-    """两色补全：按明度/彩度决定谁当主场/结构/点缀，再补第三个。"""
+    """两色补全：按明度/彩度决定谁当主场/结构/点缀，再补第三个。
+
+    两色都 `can_ground` 时返回两种读法并列（各留至少一套）：白为地、红成块，
+    与红为地、白成块。只按 quiet_key 排一次的话，苋菜红+汉白玉 永远只出白地，
+    「宫墙为局」这条读法在 complete 里根本不存在——而它恰是用户拿这两色来问的
+    时候最想看到的那一种。
+    """
     ca = a if isinstance(a, Color) else cat.resolve(str(a))
     cb = b if isinstance(b, Color) else cat.resolve(str(b))
     if ca is None or cb is None:
@@ -766,24 +894,41 @@ def complete_pair(cat: Catalog, a: str | Color, b: str | Color, mood: str | None
     def quiet_key(c: Color) -> tuple:
         return (0 if c.C < 28 else 1, 0 if c.L >= 78 or c.L <= 26 else 1, c.C, -c.L if c.L >= 50 else c.L)
     first, second = (ca, cb) if quiet_key(ca) <= quiet_key(cb) else (cb, ca)
-    # first 做 60，second 可能是 30 或 10
-    out: list[Palette] = []
-    if second.C >= 40:
-        # second 当点缀，补一个 30
-        for sec in secondary_pool(cat, first, mood)[:12]:
-            sc = score_trio(first, sec, second, mood)
-            pal = Palette(first, sec, second, sc, mood)
-            pal.rationale = _rationale(pal)
-            out.append(pal)
-    else:
-        # second 当 30，补一个 10
-        for acc in accent_pool(cat, first, second, mood)[:12]:
-            sc = score_trio(first, second, acc, mood)
-            pal = Palette(first, second, acc, sc, mood)
-            pal.rationale = _rationale(pal)
-            out.append(pal)
-    out.sort(key=lambda p: -p.score["total"])
-    return out[:5]
+
+    def reading(ground: Color, other: Color) -> list[Palette]:
+        out: list[Palette] = []
+        if other.C >= 40:
+            # other 当点缀，补一个 30
+            for sec in secondary_pool(cat, ground, mood)[:12]:
+                if sec.name in (ground.name, other.name):
+                    continue
+                sc = score_trio(ground, sec, other, mood)
+                pal = Palette(ground, sec, other, sc, mood)
+                pal.rationale = _rationale(pal)
+                out.append(pal)
+        else:
+            # other 当 30，补一个 10
+            for acc in accent_pool(cat, ground, other, mood)[:12]:
+                if acc.name in (ground.name, other.name):
+                    continue
+                sc = score_trio(ground, other, acc, mood)
+                pal = Palette(ground, other, acc, sc, mood)
+                pal.rationale = _rationale(pal)
+                out.append(pal)
+        out.sort(key=lambda p: -p.score["total"])
+        return out
+
+    primary = reading(first, second)
+    # 第二读法只在「翻过来也真能当底」时给。两色都是浅色时翻过来还是纸地，
+    # 那不是第二种读法，只是把同一种读法说两遍。
+    invert = (can_ground(cat, second) and can_ground(cat, first)
+              and abs(first.L - second.L) >= 20)
+    if not invert:
+        return primary[:5]
+    alt = reading(second, first)
+    if not alt:
+        return primary[:5]
+    return primary[:3] + alt[:3]
 
 
 def _rationale(p: Palette) -> list[str]:

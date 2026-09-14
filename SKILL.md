@@ -21,7 +21,9 @@ description: >
 python scripts/palette.py ask "茶叶小店的网站，安静一点"
 ```
 
-脚本回读一行 `解读: 网页界面 · 素净耐看 · 浅色底`，然后给 2 套带色条的方案。照着念。
+脚本回读一行 `解读: 网页界面 · 素净耐看 · 浅色底`，然后给 2 套方案：一条按真实面积
+等比的方块条（`██…▓▓…▒▒`，底/块/点），加三行落位（色名、hex、面积）。照着念，
+方块条可以原样复述给用户。
 
 ## 路由
 
@@ -36,6 +38,7 @@ python scripts/palette.py ask "茶叶小店的网站，安静一点"
 | 提到梅兰竹菊、荷花、远山、水纹、回纹、卷草、藻井、团花这类纹样 | `ask` 会自己认出来并给点缀。细则读 `references/motifs.md` |
 | 要看有哪些纹样 | `motifs`（可加 `--scene` / `--category`） |
 | 要做图表 | 读 `references/dataviz.md`，用 `pick` 产出的 `chart` 段 |
+| 想看真彩色块，或要一张给人看的图（终端里出来的是方块） | `preview --out <文件>.html` |
 | 要和别的设计技能配合 | 读 `references/handoff.md` |
 | 自己已经说了行话（青花、雅、主色辅色） | 可以直接用 `generate --scene/--mood`，并跟着用他的词 |
 

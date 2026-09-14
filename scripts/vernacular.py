@@ -562,6 +562,14 @@ class Vernacular:
             table = cfg.get("louder_map" if louder else "quieter_map", {})
             cur = current_mood or ("雅" if louder else "艳")
             nxt = table.get(cur)
+            # 有几族词的终点与起点无关，逐档爬到不了：『不够气派』从雅只爬到艳，
+            # 而它要的是压得住；『更喜庆』从艳会爬到浓烈，而它要的是红配绿。
+            # 这几族在 louder_to 里直接写死终点，先于 louder_map。
+            if louder:
+                for dest, words in (cfg.get("louder_to") or {}).items():
+                    if any(w in text for w in words):
+                        nxt = dest
+                        break
             if nxt and nxt != cur:
                 out["mood"] = nxt
                 out["actions"].append(("素艳", f"{cur} -> {nxt}"))

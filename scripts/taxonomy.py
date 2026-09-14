@@ -269,6 +269,13 @@ def roles_of(family: str, l: float, c: float, contrast_white: float,
         tags.append("纸感")
     if l <= 26:
         tags.append("深底")
+    # 彩底：深而彩的矿物色，可以整片铺开——朱红宫墙、赭石土壁、蓝釉为地都是这一类。
+    # 判据只两条：够彩（C>=40）、白字压得住（contrast_white>=4.5）。
+    # 白字 4.5 的门槛已经隐含了「不能是中调」——实测切出的 58 色 L* 全部 ≤52，
+    # 再写一条 l <= 52 是冗余的，不是更严。
+    # 挡住的正是不能做底的那批：朱红 3.58、银朱 3.76、大红 3.63（只能大字）。
+    if c >= 40 and contrast_white >= 4.5:
+        tags.append("彩底")
     # 承载内容的中间层
     if 62 <= l < 90 and c <= 26:
         tags.append("面层")
