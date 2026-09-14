@@ -4,3 +4,6 @@ __pycache__/
 
 # 运行期产物：交接给下游技能的配色真源
 .palette/
+
+# selftest 跑 CLI 子进程时的落地目录，每次重建
+.selftest-tmp/
