@@ -223,7 +223,7 @@
    "补服": "石青深底上一枚金线徽章"
   },
   "role_labels_from": "engine.MEDIA[media]['labels']",
-  "role_labels_note": "角色不要新造词。仓库里已有四套落位词：ui=页面背景/卡片与导航/主按钮，poster=纸地/主体色块/印章与题名，fashion=主面料/缘饰里衬/盘扣绣佩，interior=墙面地面/家具柜门/摆件或一扇门。输出强制走这一层。"
+  "role_labels_note": "角色不要新造词。四套落位词：ui=页面背景/导航与图形/主按钮，普通卡片另用低彩面层；poster=纸地/主体色块/印章与题名，fashion=主面料/缘饰里衬/盘扣绣佩，interior=墙面地面/家具柜门/摆件或一扇门。输出走这一层。"
  },
 
  "neutral_terms": [

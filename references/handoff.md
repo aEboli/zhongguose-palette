@@ -26,11 +26,19 @@ python scripts/palette.py pick "鱼肚白+战舰灰+银朱" --scene 水墨 --med
 
 | 技能 | 读 | 明确不读 |
 | --- | --- | --- |
-| frontend-design | `meta` `named6` `roles` `ornament` `cliche` `bans` | `tokens_*` `chart` |
-| artifact-design | `css.light` `css.dark` `tokens_light` `tokens_dark` `bans` | `chart` `named6` |
+| frontend-design | `meta` `named6` `roles` `css` `tokens_*` `verify` `verify_dark` `issues` `ornament` `bans` | `chart` |
+| artifact-design | `css` `tokens_*` `verify` `verify_dark` `issues` `bans` | `chart` `named6` |
 | dataviz | `chart` `tokens_light.bg/text/border` `bans` | `named6` `roles` |
 
 只读自己那段，避免上下文膨胀。
+
+`named6` 是概览，不是完整组件配色。普通卡片用 `surface` 配 `text` / `muted`；
+彩色导航用 `secondary` 配 `secondary_fg`；按钮默认、悬停、按下共用 `accent_fg`。
+状态徽章必须配各自的 `*_fg`，仅在实际状态出现时使用，不能当多彩卡片装饰。
+
+`verify` 与可选的 `verify_dark` 检查实际导出值，包含页面、卡片和按钮状态；
+不达标项目同时进入 `issues`，深色问题带 `theme: dark`。判断使用原始比值，显示值才保留两位小数。
+焦点环用 `ring`，留出背景色间隔再围住控件，不能直接贴着未经检查的彩色按钮边缘。
 
 ## ornament：纹样点缀怎么消费
 
@@ -115,15 +123,13 @@ border 是菊蕾白 C=20.8，都在彩度档要计费；水墨的 accent 是银�
 
 ## family lock
 
-`tokens()` 的签名里没有 scene，是 scene-blind 的，所以派生层会漏色。
+`tokens()` 在派生时统一执行色族检查，所有输出入口使用相同的结果。强调色及其交互态允许
+`accent_break` 中的破色；低彩中性色可以承托场景，不能因为中文色名带“紫”或“绿”就反复换灰阶。
 
-实测 `--scene 青花 --dark`：surface=暗龙胆紫、border=龙葵紫、border_strong=山梗紫
-——青配紫，正是荆浩点名的死局，而 `artifact-design` 消费的恰恰是 token 而非三色。
+选定的三色保持原样；与场景冲突时保留并写入 `issues[]`。派生色的修补必须同时保住全部实际
+前景/背景配对及按钮的色相方向，不能先逐项换色、再留下失效配对。
 
-交接前扫一遍：落在「场景色族 ∪ {灰,白,黑}」之外的按同明度吸附回场景语汇，
-改不动的写进 `issues[]` 并向用户明说。
-
-**语义色不参与扫描**：success / warning / error / info 的绿黄红青是文化锁，本就跨族。
+**语义色及对应字色不参与场景扫描**：它们承担各自状态的含义。
 
 ## 暗色两块 CSS 的正确形状
 
@@ -131,8 +137,8 @@ border 是菊蕾白 C=20.8，都在彩度档要计费；水墨的 accent 是银�
 
 ```css
 :root { color-scheme: light dark; }
-:root { /* 亮色 17 个变量 */ }
-[data-theme="dark"] { /* 暗色 17 个变量 */ }
+:root { /* 亮色变量 */ }
+[data-theme="dark"] { /* 暗色变量 */ }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) { /* 同上 */ }
 }

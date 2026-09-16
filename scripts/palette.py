@@ -18,13 +18,14 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from html import escape
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import render as rd  # noqa: E402
 from engine import (  # noqa: E402
-    MEDIA, MOODS, SCENES, Catalog, Color, Palette, SeedNotFound, apply_family_lock,
-    as_dict, cliche_check, complete_pair, css_vars, family_lock, generate, pick_text,
+    MEDIA, MOODS, SCENES, Catalog, Color, Palette, SeedNotFound,
+    as_dict, cliche_check, complete_pair, contrast, css_vars, family_lock, generate,
     tokens, tailwind_extend, visual_areas,
 )
 from vernacular import Vernacular  # noqa: E402
@@ -56,8 +57,10 @@ def _print_palette(p: Palette, cat: Catalog, show_tokens: bool = True) -> None:
         tok = tokens(cat, p)
         print("  tokens:")
         for k in ("bg", "surface", "text", "muted", "border", "border_strong",
-                  "secondary", "accent", "accent_fg", "accent_hover", "accent_active",
-                  "success", "warning", "error", "info", "disabled", "ring"):
+                  "secondary", "secondary_fg", "accent", "accent_fg",
+                  "accent_hover", "accent_active",
+                  "success", "success_fg", "warning", "warning_fg",
+                  "error", "error_fg", "info", "info_fg", "disabled", "ring"):
             c = tok[k]
             print(f"    {k:14s} {c.name:8s} {c.hex}")
 
@@ -90,10 +93,21 @@ def _print_plain(p: Palette, cat: Catalog, vern: Vernacular, bar: bool = True,
     print(f"  {l1:8s} {p.dominant.name:6s} {p.dominant.hex}   约 {areas['dominant']:.0f}%")
     print(f"  {l2:8s} {p.secondary.name:6s} {p.secondary.hex}   约 {areas['secondary']:.0f}%")
     print(f"  {l3:8s} {p.accent.name:6s} {p.accent.hex}   约 {areas['accent']:.0f}%")
-    text = pick_text(cat, p.dominant)
-    ratio = __import__("engine").contrast(text, p.dominant)
+    tok = tokens(cat, p)
+    text = tok["text"]
+    ratio = contrast(text, p.dominant)
     grade = "AAA" if ratio >= 7 else ("AA" if ratio >= 4.5 else "不够")
     print(f"  正文用    {text.name:6s} {text.hex}   对比 {ratio:.1f}:1 {grade}")
+    if p.media == "ui":
+        from handoff import _verify
+        print(f"  卡片底    {tok['surface'].name:6s} {tok['surface'].hex}   普通内容卡片用这个色")
+        for label, fg, bg_key in (("说明字", "muted", "surface"),
+                                  ("彩块字", "secondary_fg", "secondary"),
+                                  ("按钮字", "accent_fg", "accent")):
+            c = tok[fg]
+            print(f"  {label:6s}  {c.name:6s} {c.hex}   对比 {contrast(c, tok[bg_key]):.2f}:1")
+        for issue in _verify(tok, cat)["fail"]:
+            print(f"  提醒      {issue['label']}对比不足 {issue['need']}:1，不能按普通界面直接使用")
     # 出处与注意事项照带，但用白话版——术语版留给 --voice tech
     if p.origin_plain:
         print(f"  来处      {p.origin_plain}")
@@ -105,7 +119,7 @@ def _print_plain(p: Palette, cat: Catalog, vern: Vernacular, bar: bool = True,
 def _plain_palette_dict(p: Palette, cat: Catalog) -> dict:
     areas = visual_areas(p)["pixel_pct"]
     l1, l2, l3 = _role_labels(p.media)
-    text = pick_text(cat, p.dominant)
+    text = tokens(cat, p)["text"]
     return {
         "id": f"{p.dominant.name}+{p.secondary.name}+{p.accent.name}",
         "slots": [
@@ -201,7 +215,7 @@ def cmd_ask(cat: Catalog, args: argparse.Namespace) -> int:
     if args.css:
         pals = generate(cat, n=1, **directions[0][1])
         if pals:
-            tok, _ = apply_family_lock(cat, tokens(cat, pals[0]), pals[0].scene)
+            tok = tokens(cat, pals[0])
             print()
             print(css_vars(tok))
     print(f"\n下一步: 说「就第 1 套」定妆，或者说「太素了 / 红少一点 / 改深色」我来调。")
@@ -289,8 +303,14 @@ def cmd_pick(cat: Catalog, args: argparse.Namespace) -> int:
           f"块 {data['roles']['secondary']['area_pct']}%  "
           f"点 {data['roles']['accent']['area_pct']}%")
     v = data["verify"]
+    # 「块上的字」必须在这一行里。原先打的四个数字（正文/次级/按钮字/描边）
+    # 一个都不是块上的字，而块的落位是「卡片与导航」——下游一定在它上面放字。
     print(f"实测对比: 正文 {v['text_on_bg']}:1  次级 {v['muted_on_bg']}:1  "
+          f"块上的字 {v['secondary_fg_on_secondary']}:1  "
           f"按钮字 {v['accent_fg_on_accent']}:1  描边 {v['border_strong_on_bg']}:1")
+    print(f"          徽章上的字 成功 {v['success_fg_on_success']}:1  "
+          f"警示 {v['warning_fg_on_warning']}:1  错误 {v['error_fg_on_error']}:1  "
+          f"信息 {v['info_fg_on_info']}:1")
     orn = data.get("ornament") or {}
     if orn.get("unknown_ids"):
         # 拼错的 id 要报出来，不许静默交出一个没有纹样的文件
@@ -511,55 +531,116 @@ def cmd_preview(cat: Catalog, args: argparse.Namespace) -> int:
 
 
 def _preview_html(cat: Catalog, pals: list[Palette]) -> str:
-    blocks = []
+    from handoff import _verify
+    blocks, styles = [], []
     for i, p in enumerate(pals):
         tok = tokens(cat, p)
-        # 宽度必须取真实的建议铺色面积。写死 6/3/1 等于在视觉上违反自己的铁律 3
-        # ——实测这套是 80/16/4，硬编码会把标点画成实际的四倍宽。
+        styles.append(css_vars(tok, f".scheme-{i}"))
         areas = visual_areas(p)["pixel_pct"]
         labels = _role_labels(p.media)
         swatches = "".join(
-            f'<div class="sw" style="flex:{pct};background:{c.hex}" title="{label} {c.name} {c.hex}">'
-            f'<span>{label} {c.name}<br>{c.hex} · {pct:.0f}%</span></div>'
+            f'<div style="flex:{pct};background:{c.hex}" title="{label} {c.name} {c.hex} · {pct:.0f}%"></div>'
             for pct, label, c in ((areas["dominant"], labels[0], p.dominant),
                                   (areas["secondary"], labels[1], p.secondary),
                                   (areas["accent"], labels[2], p.accent))
         )
         token_row = "".join(
-            f'<div class="tk"><i style="background:{c.hex}"></i><b>{k}</b><em>{c.name}</em><code>{c.hex}</code></div>'
+            f'<div class="tk"><i style="background:{c.hex}"></i><span>{k}</span><span>{c.name}</span><code>{c.hex}</code></div>'
             for k, c in tok.items()
         )
-        why = "".join(f"<li>{line}</li>" for line in p.rationale)
-        blocks.append(
-            f'<article><header><h2>方案 {i+1} · {p.score["total"]:.0f} 分'
-            f'{(" · "+p.mood) if p.mood else ""}{(" · "+p.scene) if p.scene else ""}</h2></header>'
-            f'<div class="bar">{swatches}</div><div class="tokens">{token_row}</div>'
-            f'<ul class="why">{why}</ul></article>'
-        )
+        legend = "".join(f'<span><i style="background:{c.hex}"></i>{c.name} <code>{c.hex}</code>'
+                         f' · {areas[r]:.0f}%</span>'
+                         for r, c in (("dominant", p.dominant), ("secondary", p.secondary), ("accent", p.accent)))
+        verify = _verify(tok, cat)
+        checks = "".join(f'<span>{label} <b>{verify[key]:.2f}:1</b></span>' for key, label in (
+            ("text_on_surface", "卡片正文"), ("muted_on_surface", "卡片说明"),
+            ("accent_fg_on_accent_hover", "悬停文字"), ("accent_fg_on_accent_active", "按下文字"),
+            ("border_strong_on_surface", "输入轮廓")))
+        issues = "".join(f'<li>{escape(f["label"])} {f["got"]}:1，需 ≥{f["need"]}:1</li>'
+                         for f in verify["fail"])
+        title = escape(p.curated_name or p.scene or p.mood or "中国色")
+        component = f'''
+          <div class="demo">
+            <nav aria-label="示例导航"><strong>山间茶事</strong><span class="nav-current">茶单</span><span>产地</span><span>关于</span></nav>
+            <div class="demo-grid">
+              <section class="intro"><p class="eyebrow">本季 · 山间新茶</p>
+                <h3>一盏清茶，<br>留一点从容。</h3>
+                <p class="description">慢一点，感受茶叶舒展的时间。<br>从一份清晰的茶单，找到今天的味道。</p>
+                <div class="actions"><button type="button" class="primary">查看茶单</button><button type="button" class="quiet">了解产地</button></div>
+              </section>
+              <section class="content-card"><h4>春日茶单</h4><p class="muted">本季新采 · 两款风味</p>
+                <div class="tea-row"><span>明前龙井</span><span class="muted">清鲜 · 豆香</span></div>
+                <div class="tea-row"><span>正山小种</span><span class="muted">温润 · 花香</span></div>
+                <label for="search-{i}">寻找一款茶</label><input id="search-{i}" placeholder="输入茶名" type="text">
+              </section>
+            </div>
+            <div class="states" aria-label="按钮状态对照"><span class="muted">按钮状态</span>
+              <button type="button" class="primary">默认</button><button type="button" class="primary hover-state">悬停</button><button type="button" class="primary active-state">按下</button>
+            </div>
+          </div>''' if p.media in (None, "ui") else ""
+        blocks.append(f'''
+          <article class="scheme-{i}">
+            <header class="scheme-heading"><h2>{i+1:02d} · {title}</h2><span>{"深色" if p.dark else "浅色"}方案</span></header>
+            {component}
+            <div class="bar" aria-label="建议铺色面积">{swatches}</div><div class="legend">{legend}</div>
+            <div class="checks">{checks}</div>{f'<ul class="issues">{issues}</ul>' if issues else ''}
+            <details><summary>查看完整颜色与用途</summary><div class="tokens">{token_row}</div></details>
+          </article>''')
+    paper, ink = cat.by_name["鱼肚白"], cat.by_name["长石灰"]
     return f"""<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8">
-<title>中国色配色预览</title>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中国色 · 组件配色预览</title>
 <style>
-  :root {{ color-scheme: light; }}
-  body {{ margin: 0; font: 15px/1.6 "Songti SC","Noto Serif SC","Source Han Serif SC",serif;
-         background: #f7f4ed; color: #2b2b2b; }}
-  h1 {{ font-weight: 500; letter-spacing: .2em; text-align: center; padding: 2rem 1rem .5rem; }}
-  article {{ max-width: 920px; margin: 0 auto 2.5rem; padding: 0 1.25rem; }}
-  .bar {{ display: flex; height: 160px; border-radius: 2px; overflow: hidden; }}
-  .sw {{ position: relative; }}
-  .sw span {{ position: absolute; left: 12px; bottom: 10px; color: #111;
-              background: rgba(255,255,255,.55); padding: 2px 8px; font-size: 12px; }}
-  .tokens {{ display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }}
+  {''.join(styles)}
+  * {{ box-sizing: border-box; }}
+  body {{ margin: 0; background: {paper.hex}; color: {ink.hex}; font: 15px/1.6 system-ui,"Microsoft YaHei",sans-serif; }}
+  main {{ max-width: 1080px; margin: auto; padding: 40px 24px; }}
+  h1 {{ font-size: 24px; margin: 0; font-weight: 500; }}
+  .lead {{ margin: 8px 0 32px; }}
+  article {{ margin-bottom: 48px; }}
+  .scheme-heading {{ display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 16px 0; }}
+  h2 {{ font-size: 17px; font-weight: 500; margin: 0; }}
+  .demo {{ background: var(--color-bg); color: var(--color-text); padding: 28px 36px; border-radius: 8px; }}
+  nav {{ display: flex; gap: 24px; align-items: center; }}
+  nav strong {{ margin-right: auto; font-weight: 600; letter-spacing: .14em; }}
+  .nav-current {{ background: var(--color-secondary); color: var(--color-secondary-fg); padding: 3px 14px; border-radius: 4px; }}
+  .demo-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin: 32px 0; align-items: center; }}
+  .eyebrow, .muted, .description {{ color: var(--color-muted); }}
+  .eyebrow {{ font-size: 13px; margin: 0 0 12px; }}
+  h3 {{ margin: 0; font: 500 36px/1.4 "Noto Serif SC","SimSun",serif; }}
+  .description {{ font-size: 14px; margin: 20px 0; }}
+  .actions, .states {{ display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }}
+  button, input {{ font: inherit; }}
+  button {{ cursor: pointer; min-height: 42px; padding: 8px 18px; border-radius: 4px; border: 0; }}
+  .primary {{ background: var(--color-accent); color: var(--color-accent-fg); }}
+  .primary:hover, .hover-state {{ background: var(--color-accent-hover); }}
+  .primary:active, .active-state {{ background: var(--color-accent-active); transform: translateY(1px); }}
+  .quiet {{ background: var(--color-bg); color: var(--color-text); text-decoration: underline; text-underline-offset: 4px; }}
+  .demo :focus-visible {{ outline: 2px solid var(--color-ring); outline-offset: 3px; }}
+  .content-card {{ background: var(--color-surface); color: var(--color-text); padding: 24px; border-radius: 6px; }}
+  h4 {{ margin: 0; font-size: 19px; font-weight: 500; }}
+  .content-card p {{ margin: 5px 0 16px; font-size: 13px; }}
+  .tea-row {{ display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--color-border); }}
+  label {{ display: block; font-size: 13px; margin: 16px 0 6px; }}
+  input {{ width: 100%; min-width: 0; padding: 9px 12px; border: 1px solid var(--color-border-strong); border-radius: 4px; background: var(--color-surface); color: var(--color-text); }}
+  input::placeholder {{ color: var(--color-muted); opacity: 1; }}
+  .states {{ border-top: 1px solid var(--color-border); padding-top: 20px; font-size: 13px; }}
+  .states button {{ min-height: 36px; padding: 6px 16px; }}
+  .bar {{ display: flex; height: 10px; margin-top: 20px; overflow: hidden; }}
+  .legend, .checks {{ display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 12px 0; font-size: 13px; }}
+  .legend span {{ display: inline-flex; gap: 6px; align-items: center; }}
+  .legend i, .tk i {{ display: inline-block; flex-shrink: 0; width: 14px; height: 14px; }}
+  code {{ font: 12px/1.5 ui-monospace,monospace; }}
+  summary {{ cursor: pointer; font-size: 13px; }}
+  .tokens {{ display: grid; grid-template-columns: repeat(auto-fit,minmax(290px,1fr)); gap: 8px 24px; margin-top: 16px; }}
   .tk {{ display: flex; align-items: center; gap: 8px; font-size: 12px; }}
-  .tk i {{ width: 18px; height: 18px; display: inline-block; border: 1px solid #0001; }}
-  .tk em {{ font-style: normal; }}
-  .tk code {{ color: #666; }}
-  .why {{ color: #555; }}
-</style></head>
-<body>
-<h1>中国色 · 配色</h1>
+  .tk span:first-of-type {{ min-width: 104px; }}
+  .issues {{ padding-left: 20px; }}
+  @media(max-width:680px) {{ main {{ padding: 24px 16px; }} .demo {{ padding: 24px 20px; }} .demo-grid {{ grid-template-columns: 1fr; gap: 28px; }} nav {{ gap: 12px; font-size: 13px; }} h3 {{ font-size: 30px; }} .tokens {{ grid-template-columns: 1fr; }} }}
+</style></head><body><main>
+<h1>中国色 · 组件配色预览</h1><p class="lead">在实际文字、卡片和按钮上看配色。悬停、按下按钮，或用 Tab 检查焦点。</p>
 {''.join(blocks)}
-</body></html>
+</main></body></html>
 """
 
 

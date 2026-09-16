@@ -242,7 +242,7 @@ def test_generate() -> None:
 
 def test_tokens() -> None:
     """UI token 必须能直接落地：WCAG 达标、层次可见、语义色相正确。"""
-    from engine import contrast, delta_e, pick_text, tokens
+    from engine import contrast, delta_e, tokens
     cat = Catalog()
     cases = [
         ("浅色-水墨", dict(media="ui", scene="水墨")),
@@ -259,8 +259,10 @@ def test_tokens() -> None:
         tok = tokens(cat, pals[0])
         bg = tok["bg"]
         for key in ("bg", "surface", "text", "muted", "border", "border_strong",
-                    "secondary", "accent", "accent_fg", "accent_hover", "accent_active",
-                    "success", "warning", "error", "info", "disabled", "ring"):
+                    "secondary", "secondary_fg", "accent", "accent_fg",
+                    "accent_hover", "accent_active",
+                    "success", "success_fg", "warning", "warning_fg",
+                    "error", "error_fg", "info", "info_fg", "disabled", "ring"):
             check(key in tok, f"{label} 缺 token {key}")
             check(tok[key].hex in cat.by_hex, f"{label} {key}={tok[key].hex} 必须在库内")
         check(contrast(tok["text"], bg) >= 4.5, f"{label} 正文 {contrast(tok['text'], bg):.2f} 应 ≥4.5")
@@ -275,10 +277,103 @@ def test_tokens() -> None:
               f"{label} 面层与底 ΔE {delta_e(tok['surface'], bg):.1f} 应 ≥4")
         check(110 <= tok["success"].H <= 170, f"{label} success 色相 {tok['success'].H:.0f} 应在绿区")
         check(70 <= tok["warning"].H <= 105, f"{label} warning 色相 {tok['warning'].H:.0f} 应在黄区")
+        # 断言**已输出的** *_fg，不再临时 pick_text 一个从不交付的色。
+        # 原先这 20 条断言验的正是 pick_semantic 算完就丢掉的那个 on——
+        # 全过，却与交付物无关（下游拿到徽章色后只有 --color-text 可用）。
         for key in ("success", "warning", "error", "info"):
-            on = pick_text(cat, tok[key], 4.5)
-            check(contrast(on, tok[key]) >= 4.5, f"{label} {key} 徽章上放不下字")
-        check(tok["accent_hover"].name != tok["accent"].name, f"{label} hover 应区别于 accent")
+            fg = tok[key + "_fg"]
+            check(contrast(fg, tok[key]) >= 4.5,
+                  f"{label} {key} 徽章上放不下字：交付的 {key}_fg={fg.name} 实测 "
+                  f"{contrast(fg, tok[key]):.2f}:1")
+        # 块上的字：块的落位是「卡片与导航」，下游一定在它上面放字。
+        # 死区色（库内不存在 4.5 的搭配）不硬断言 4.5——那不是修好，是把缺陷藏起来。
+        # 所以断言分两条：能达标的必须达标；达不到的必须仍在大字额度内，
+        # 且库内确实换不出更好的（否则就是挑错了，不是死区）。
+        sec_fg, sec = tok["secondary_fg"], tok["secondary"]
+        got = contrast(sec_fg, sec)
+        best = max(contrast(x, sec) for x in cat.colors if x.name != sec.name)
+        if best >= 4.5:
+            check(got >= 4.5,
+                  f"{label} 块上的字 {sec_fg.name} 实测 {got:.2f}:1 应 ≥4.5"
+                  f"（库内最高 {best:.2f}:1，够用却没挑到）")
+        else:
+            check(got >= 3.0,
+                  f"{label} {sec.name} 是死区色（库内最高 {best:.2f}:1），"
+                  f"块上的字仍须落在大字额度内，实测 {got:.2f}:1")
+            check(abs(got - best) < 0.01,
+                  f"{label} 死区色 {sec.name} 上应交出库内最好的那个字色，"
+                  f"实测 {got:.2f}:1 vs 最高 {best:.2f}:1")
+        check(contrast(tok["accent_fg"], tok["accent_hover"]) >= 4.5,
+              f"{label} hover 必须可读，库内无安全变体时可以沿用原色")
+
+
+def test_ui_components() -> None:
+    """检查真实组件的配对及交接一致性，覆盖原自检通过但实际失败的方案。"""
+    from unittest.mock import patch
+    import handoff as ho
+    from engine import Palette, apply_family_lock, contrast
+
+    cat = Catalog()
+    cases = [
+        ("江南", False, ("粉白", "瓦松绿", "苋菜红")),
+        ("青花", False, ("雪白", "群青", "鷃蓝")),
+        ("宋瓷", False, ("月白", "霁青", "战舰灰")),
+        ("水墨", True, ("苍蝇灰", "芦灰", "夕阳红")),
+        ("宋瓷", True, ("云杉绿", "飞泉绿", "淡灰绿")),
+        (None, True, ("长石灰", "萝兰紫", "灰绿")),
+        ("敦煌", False, ("赭石", "群青", "甘草黄")),
+    ]
+    pairs = [
+        ("text", "surface", 4.5), ("muted", "surface", 4.5),
+        ("accent_fg", "accent_hover", 4.5), ("accent_fg", "accent_active", 4.5),
+        ("border_strong", "surface", 3.0), ("ring", "bg", 3.0),
+        ("ring", "surface", 3.0),
+    ]
+    for scene, dark, names in cases:
+        cols = [cat.by_name[n] for n in names]
+        pal = Palette(*cols, score_trio(*cols), scene=scene, dark=dark, media="ui")
+        raw = tokens(cat, pal)
+        fixed, _ = apply_family_lock(cat, raw, scene)
+        data = ho.build(cat, pal)
+        label = f"{scene or '默认'} dark={dark}"
+        for role, key in (("dominant", "bg"), ("secondary", "secondary"), ("accent", "accent")):
+            check(data["roles"][role]["hex"] == data["tokens_light"][key]["hex"],
+                  f"{label} {role} 的色卡与交接必须一致")
+        check(all(raw[k].hex == fixed[k].hex for k in raw),
+              f"{label} 直接导出与交接颜色必须一致")
+        for fg, bg, need in pairs:
+            got = contrast(fixed[fg], fixed[bg])
+            check(got >= need, f"{label} {fg}/{bg}={got:.3f} 应 ≥{need}")
+            check(f"{fg}_on_{bg}" in data["verify"], f"{label} 交接必须检查 {fg}/{bg}")
+        for key in ("accent_hover", "accent_active"):
+            anchor, state = fixed["accent"], fixed[key]
+            coherent = (state.C <= 14 if anchor.C < 12 else
+                        state.C >= anchor.C * 0.5 and ck.hue_delta(state.H, anchor.H) <= 25)
+            check(coherent, f"{label} {key} 必须沿用按钮的色相方向")
+        check(fixed["surface"].C <= 12, f"{label} 普通面层应保持低彩")
+    # 阈值不能用显示值判定：4.499 显示为 4.50，仍然不通过。
+    with patch("handoff.contrast", return_value=4.499):
+        report = ho._verify(raw)
+    check(any(f["check"] == "text_on_bg" for f in report["fail"]),
+          "4.499:1 不得四舍五入为合格的 4.5:1")
+
+    # 显式指定的场景外颜色必须保留，问题应可见。
+    pinned = Palette(cat.by_name["雪白"], cat.by_name["群青"], cat.by_name["苋菜红"],
+                     {}, scene="青花", media="ui")
+    fixed, issues = apply_family_lock(cat, tokens(cat, pinned), "青花")
+    check(fixed["accent"].name == "苋菜红", "色族检查不得静默换掉指定的按钮色")
+    check(any(i["token"] == "accent" and i.get("kept") for i in issues),
+          "指定色与场景冲突时要保留并报告")
+
+    paired = ho.build(cat, pal, dark_pal=pal)
+    check("verify_dark" in paired, "深色交接必须有实际配对校验")
+    check(paired.get("verify_dark") == paired["verify"], "相同颜色的亮暗校验结果应一致")
+    quiet = generate(cat, mood="雅", media="ui", n=1)[0]
+    check(max(quiet.secondary.C, quiet.accent.C) <= 50,
+          "默认素雅 UI 不应优先高彩方案")
+    check(min(quiet.secondary.C, quiet.accent.C) < 12 or
+          ck.hue_delta(quiet.secondary.H, quiet.accent.H) <= 45,
+          "默认素雅 UI 优先同色系或中性色承托")
 
 
 def test_vernacular() -> None:
@@ -540,7 +635,14 @@ def test_motifs() -> None:
             check(empty not in txt, f"{doc} 里不该提空类别 {empty}")
 
     # 核心约束：资产里不许有任何色值，只许借 token
-    LEGAL = set(TOKEN_KEYS) | {"bg"}
+    # `set(TOKEN_KEYS)` 会让每个新加的 token 自动变成纹样可借的合法源——
+    # 前景色（块上/徽章上的字）绝不能这样默认放行：它们各欠一份 4.5:1 的对比义务，
+    # 借给装饰层等于让纹样跟着字色走。所以显式减掉，白名单以 ink_sources 为准。
+    FG_TOKENS = {"secondary_fg", "success_fg", "warning_fg", "error_fg", "info_fg"}
+    LEGAL = (set(TOKEN_KEYS) - FG_TOKENS) | {"bg"}
+    for k in FG_TOKENS:
+        check(k in TOKEN_KEYS, f"{k} 应是已交付的 token（这条守住上面的减法不是空操作）")
+        check(k not in LEGAL, f"{k} 是前景色，不许成为纹样的合法借色源")
     for m in ms:
         blob = json.dumps(m, ensure_ascii=False)
         check("#" not in blob, f"{m['id']} 里不许出现 hex——纹样借色，不带色")
@@ -698,7 +800,9 @@ def test_motifs() -> None:
     # 借色白名单：交互态、语义徽章、失能态、焦点环不许借给装饰层
     allowed = set((data.get("ink_sources") or {}).get("allowed") or [])
     check(bool(allowed), "必须给出合法借色源白名单")
-    for forbidden in ("accent_fg", "accent_hover", "success", "warning", "disabled", "ring"):
+    for forbidden in ("accent_fg", "accent_hover", "success", "warning", "disabled", "ring",
+                      # 块上与徽章上的字：前景色不许借给装饰层
+                      "secondary_fg", "success_fg", "warning_fg", "error_fg", "info_fg"):
         check(forbidden not in allowed, f"{forbidden} 不该在借色白名单里")
     for m in ms:
         for b in (m.get("borrows_token") or []):
@@ -1345,12 +1449,23 @@ def test_token_family() -> None:
                 continue
             tok = tokens(cat, pals[0])
             fixed, remain = apply_family_lock(cat, tok, scene)
-            # 对比义务不许被换色破坏
+            # 对比义务不许被换色破坏。
+            # 判据是「库内换得出来吗」而不是死数字 4.5：有 16 个色库内根本不存在
+            # 4.5 的搭配，把它们硬断言成 4.5 只会把这条测试打挂，而那不是修好，
+            # 是逼着代码去藏缺陷。库内换不出来时，仍要求交出库内最好的那一个。
             for key, (partner, need) in TOKEN_OBLIGATIONS.items():
                 got = contrast(fixed[key], fixed[partner])
-                check(got >= need,
-                      f"{scene} dark={dark} 换色后 {key}({fixed[key].name}) 对 "
-                      f"{partner} 只有 {got:.2f}:1，应 ≥{need}")
+                base = fixed[partner]
+                best = max(contrast(x, base) for x in cat.colors if x.name != base.name)
+                if best >= need:
+                    check(got >= need,
+                          f"{scene} dark={dark} 换色后 {key}({fixed[key].name}) 对 "
+                          f"{partner} 只有 {got:.2f}:1，应 ≥{need}（库内最高 {best:.2f}:1）")
+                else:
+                    check(abs(got - best) < 0.01,
+                          f"{scene} dark={dark} 的 {partner}({base.name}) 是死区色"
+                          f"（库内最高 {best:.2f}:1 < {need}），{key} 应交出库内最好的那个，"
+                          f"实测 {got:.2f}:1")
             # 换不动的必须显式上报，且理由是对比义务
             leftover = family_lock(cat, fixed, scene)
             reported = {i["token"] for i in remain}
@@ -1391,6 +1506,24 @@ def test_handoff() -> None:
                 "chart", "cliche", "bans", "issues", "read_map", "scope"):
         check(seg in data, f"handoff 缺段 {seg}")
     check(len(data["named6"]) == 6, f"named6 必须占满六槽，实际 {len(data['named6'])}")
+    # 交付的 token 与闸门必须一一对上。CONTRAST_GATES 里每一项验的都得是
+    # tokens_light 里真有的两个键——闸门验一个不交付的色，是这一族缺陷的根。
+    for key in ho.CONTRAST_GATES:
+        check(key in data["verify"], f"verify 缺闸门 {key}")
+        fg, _, bgk = key.partition("_on_")
+        for side in (fg, bgk):
+            check(side in data["tokens_light"],
+                  f"闸门 {key} 验的 {side} 不在交付的 token 里——闸门必须验交付物")
+    for k in ("secondary_fg_on_secondary", "success_fg_on_success", "warning_fg_on_warning",
+              "error_fg_on_error", "info_fg_on_info"):
+        check(k in ho.CONTRAST_GATES, f"块上/徽章上的字必须有闸门：缺 {k}")
+    # 达不到 4.5 的必须落进 issues，并说明是「库内换不出」还是「挑错了」
+    for f in data["verify"]["fail"]:
+        check(any(i["token"] == f["check"] for i in data["issues"]),
+              f"闸门 {f['check']} 没达标却没进 issues——不许静默交付")
+        if f.get("library_best") is not None:
+            check("只放大字" in f["handle"],
+                  f"{f['check']} 是库内换不出的死区，handle 必须明说只放大字")
     for slot, v in data["named6"].items():
         check(v["hex"] in cat.by_hex, f"named6 的 {slot} {v['hex']} 必须在库内")
     check(bool(data["bans"]), "bans 不能为空")
@@ -1543,6 +1676,7 @@ def main() -> int:
     test_chroma_ground()
     test_generate()
     test_tokens()
+    test_ui_components()
     test_vernacular()
     test_tweak_moods()
     test_unheard()

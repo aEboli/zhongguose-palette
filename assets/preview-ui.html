@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中国色 · 组件配色预览</title>
+<style>
+  .scheme-0 {
+  --color-bg: #fbf2e3;           /* 粉白 fenbai */
+  --color-bg-rgb: 251, 242, 227;
+  --color-surface: #e4dfd7;           /* 珍珠灰 zhenzhuhui */
+  --color-surface-rgb: 228, 223, 215;
+  --color-text: #363433;           /* 长石灰 changshihui */
+  --color-text-rgb: 54, 52, 51;
+  --color-muted: #5e616d;           /* 鱼尾灰 yuweihui */
+  --color-muted-rgb: 94, 97, 109;
+  --color-border: #bbb5ac;           /* 铅灰 qianhui2 */
+  --color-border-rgb: 187, 181, 172;
+  --color-border-strong: #867e76;           /* 瓦灰 wahui */
+  --color-border-strong-rgb: 134, 126, 118;
+  --color-secondary: #6e8b74;           /* 瓦松绿 wasonglv */
+  --color-secondary-rgb: 110, 139, 116;
+  --color-secondary-fg: #141e1b;           /* 莽丛绿 mangconglv */
+  --color-secondary-fg-rgb: 20, 30, 27;
+  --color-accent: #40a070;           /* 葱绿 conglv */
+  --color-accent-rgb: 64, 160, 112;
+  --color-accent-fg: #1f2623;           /* 苷蓝绿 ganlanlv2 */
+  --color-accent-fg-rgb: 31, 38, 35;
+  --color-accent-hover: #45b787;           /* 蛙绿 walv */
+  --color-accent-hover-rgb: 69, 183, 135;
+  --color-accent-active: #5dbe8a;           /* 蔻梢绿 koushaolv */
+  --color-accent-active-rgb: 93, 190, 138;
+  --color-success: #2c9678;           /* 青矾绿 qingfanlv */
+  --color-success-rgb: 44, 150, 120;
+  --color-success-fg: #141e1b;           /* 莽丛绿 mangconglv */
+  --color-success-fg-rgb: 20, 30, 27;
+  --color-warning: #815f25;           /* 莱阳梨黄 laiyanglihuang */
+  --color-warning-rgb: 129, 95, 37;
+  --color-warning-fg: #f1f0ed;           /* 银白 yinbai */
+  --color-warning-fg-rgb: 241, 240, 237;
+  --color-error: #62102e;           /* 葡萄酒红 putaojiuhong */
+  --color-error-rgb: 98, 16, 46;
+  --color-error-fg: #f1f0ed;           /* 银白 yinbai */
+  --color-error-fg-rgb: 241, 240, 237;
+  --color-info: #1177b0;           /* 牵牛花蓝 qianniuhualan */
+  --color-info-rgb: 17, 119, 176;
+  --color-info-fg: #fffefa;           /* 海参灰 haishenhui */
+  --color-info-fg-rgb: 255, 254, 250;
+  --color-disabled: #bbb5ac;           /* 铅灰 qianhui2 */
+  --color-disabled-rgb: 187, 181, 172;
+  --color-ring: #20894d;           /* 宫殿绿 gongdianlv */
+  --color-ring-rgb: 32, 137, 77;
+}.scheme-1 {
+  --color-bg: #fffef9;           /* 雪白 xuebai */
+  --color-bg-rgb: 255, 254, 249;
+  --color-surface: #e4dfd7;           /* 珍珠灰 zhenzhuhui */
+  --color-surface-rgb: 228, 223, 215;
+  --color-text: #363433;           /* 长石灰 changshihui */
+  --color-text-rgb: 54, 52, 51;
+  --color-muted: #5e616d;           /* 鱼尾灰 yuweihui */
+  --color-muted-rgb: 94, 97, 109;
+  --color-border: #bbb5ac;           /* 铅灰 qianhui2 */
+  --color-border-rgb: 187, 181, 172;
+  --color-border-strong: #867e76;           /* 瓦灰 wahui */
+  --color-border-strong-rgb: 134, 126, 118;
+  --color-secondary: #1772b4;           /* 群青 qunqing */
+  --color-secondary-rgb: 23, 114, 180;
+  --color-secondary-fg: #fffefa;           /* 海参灰 haishenhui */
+  --color-secondary-fg-rgb: 255, 254, 250;
+  --color-accent: #144a74;           /* 鷃蓝 yanlan */
+  --color-accent-rgb: 20, 74, 116;
+  --color-accent-fg: #f1f0ed;           /* 银白 yinbai */
+  --color-accent-fg-rgb: 241, 240, 237;
+  --color-accent-hover: #144a74;           /* 鷃蓝 yanlan */
+  --color-accent-hover-rgb: 20, 74, 116;
+  --color-accent-active: #144a74;           /* 鷃蓝 yanlan */
+  --color-accent-active-rgb: 20, 74, 116;
+  --color-success: #2c9678;           /* 青矾绿 qingfanlv */
+  --color-success-rgb: 44, 150, 120;
+  --color-success-fg: #141e1b;           /* 莽丛绿 mangconglv */
+  --color-success-fg-rgb: 20, 30, 27;
+  --color-warning: #815f25;           /* 莱阳梨黄 laiyanglihuang */
+  --color-warning-rgb: 129, 95, 37;
+  --color-warning-fg: #f1f0ed;           /* 银白 yinbai */
+  --color-warning-fg-rgb: 241, 240, 237;
+  --color-error: #62102e;           /* 葡萄酒红 putaojiuhong */
+  --color-error-rgb: 98, 16, 46;
+  --color-error-fg: #f1f0ed;           /* 银白 yinbai */
+  --color-error-fg-rgb: 241, 240, 237;
+  --color-info: #1177b0;           /* 牵牛花蓝 qianniuhualan */
+  --color-info-rgb: 17, 119, 176;
+  --color-info-fg: #fffefa;           /* 海参灰 haishenhui */
+  --color-info-fg-rgb: 255, 254, 250;
+  --color-disabled: #cfccc9;           /* 玛瑙灰 manaohui */
+  --color-disabled-rgb: 207, 204, 201;
+  --color-ring: #144a74;           /* 鷃蓝 yanlan */
+  --color-ring-rgb: 20, 74, 116;
+}.scheme-2 {
+  --color-bg: #36282b;           /* 苍蝇灰 cangyinghui */
+  --color-bg-rgb: 54, 40, 43;
+  --color-surface: #483332;           /* 海报灰 haibaohui */
+  --color-surface-rgb: 72, 51, 50;
+  --color-text: #f1f0ed;           /* 银白 yinbai */
+  --color-text-rgb: 241, 240, 237;
+  --color-muted: #bdaead;           /* 芦穗灰 lusuihui */
+  --color-muted-rgb: 189, 174, 173;
+  --color-border: #4f383e;           /* 暮云灰 muyunhui */
+  --color-border-rgb: 79, 56, 62;
+  --color-border-strong: #918072;           /* 银灰 yinhui */
+  --color-border-strong-rgb: 145, 128, 114;
+  --color-secondary: #856d72;           /* 芦灰 luhui */
+  --color-secondary-rgb: 133, 109, 114;
+  --color-secondary-fg: #fffefa;           /* 海参灰 haishenhui */
+  --color-secondary-fg-rgb: 255, 254, 250;
+  --color-accent: #de2a18;           /* 夕阳红 xiyanghong */
+  --color-accent-rgb: 222, 42, 24;
+  --color-accent-fg: #fffefa;           /* 海参灰 haishenhui */
+  --color-accent-fg-rgb: 255, 254, 250;
+  --color-accent-hover: #d42517;           /* 鹤顶红 hedinghong */
+  --color-accent-hover-rgb: 212, 37, 23;
+  --color-accent-active: #ac1f18;           /* 覆盆子红 fupenzihong */
+  --color-accent-active-rgb: 172, 31, 24;
+  --color-success: #2c9678;           /* 青矾绿 qingfanlv */
+  --color-success-rgb: 44, 150, 120;
+  --color-success-fg: #141e1b;           /* 莽丛绿 mangconglv */
+  --color-success-fg-rgb: 20, 30, 27;
+  --color-warning: #f7da94;           /* 香水玫瑰黄 xiangshuimeiguihuang */
+  --color-warning-rgb: 247, 218, 148;
+  --color-warning-fg: #363433;           /* 长石灰 changshihui */
+  --color-warning-fg-rgb: 54, 52, 51;
+  --color-error: #f1939c;           /* 春梅红 chunmeihong */
+  --color-error-rgb: 241, 147, 156;
+  --color-error-fg: #363433;           /* 长石灰 changshihui */
+  --color-error-fg-rgb: 54, 52, 51;
+  --color-info: #1177b0;           /* 牵牛花蓝 qianniuhualan */
+  --color-info-rgb: 17, 119, 176;
+  --color-info-fg: #fffefa;           /* 海参灰 haishenhui */
+  --color-info-fg-rgb: 255, 254, 250;
+  --color-disabled: #4f383e;           /* 暮云灰 muyunhui */
+  --color-disabled-rgb: 79, 56, 62;
+  --color-ring: #f13c22;           /* 萝卜红 luobohong */
+  --color-ring-rgb: 241, 60, 34;
+}
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f7f4ed; color: #363433; font: 15px/1.6 system-ui,"Microsoft YaHei",sans-serif; }
+  main { max-width: 1080px; margin: auto; padding: 40px 24px; }
+  h1 { font-size: 24px; margin: 0; font-weight: 500; }
+  .lead { margin: 8px 0 32px; }
+  article { margin-bottom: 48px; }
+  .scheme-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 16px 0; }
+  h2 { font-size: 17px; font-weight: 500; margin: 0; }
+  .demo { background: var(--color-bg); color: var(--color-text); padding: 28px 36px; border-radius: 8px; }
+  nav { display: flex; gap: 24px; align-items: center; }
+  nav strong { margin-right: auto; font-weight: 600; letter-spacing: .14em; }
+  .nav-current { background: var(--color-secondary); color: var(--color-secondary-fg); padding: 3px 14px; border-radius: 4px; }
+  .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin: 32px 0; align-items: center; }
+  .eyebrow, .muted, .description { color: var(--color-muted); }
+  .eyebrow { font-size: 13px; margin: 0 0 12px; }
+  h3 { margin: 0; font: 500 36px/1.4 "Noto Serif SC","SimSun",serif; }
+  .description { font-size: 14px; margin: 20px 0; }
+  .actions, .states { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+  button, input { font: inherit; }
+  button { cursor: pointer; min-height: 42px; padding: 8px 18px; border-radius: 4px; border: 0; }
+  .primary { background: var(--color-accent); color: var(--color-accent-fg); }
+  .primary:hover, .hover-state { background: var(--color-accent-hover); }
+  .primary:active, .active-state { background: var(--color-accent-active); transform: translateY(1px); }
+  .quiet { background: var(--color-bg); color: var(--color-text); text-decoration: underline; text-underline-offset: 4px; }
+  .demo :focus-visible { outline: 2px solid var(--color-ring); outline-offset: 3px; }
+  .content-card { background: var(--color-surface); color: var(--color-text); padding: 24px; border-radius: 6px; }
+  h4 { margin: 0; font-size: 19px; font-weight: 500; }
+  .content-card p { margin: 5px 0 16px; font-size: 13px; }
+  .tea-row { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--color-border); }
+  label { display: block; font-size: 13px; margin: 16px 0 6px; }
+  input { width: 100%; min-width: 0; padding: 9px 12px; border: 1px solid var(--color-border-strong); border-radius: 4px; background: var(--color-surface); color: var(--color-text); }
+  input::placeholder { color: var(--color-muted); opacity: 1; }
+  .states { border-top: 1px solid var(--color-border); padding-top: 20px; font-size: 13px; }
+  .states button { min-height: 36px; padding: 6px 16px; }
+  .bar { display: flex; height: 10px; margin-top: 20px; overflow: hidden; }
+  .legend, .checks { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 12px 0; font-size: 13px; }
+  .legend span { display: inline-flex; gap: 6px; align-items: center; }
+  .legend i, .tk i { display: inline-block; flex-shrink: 0; width: 14px; height: 14px; }
+  code { font: 12px/1.5 ui-monospace,monospace; }
+  summary { cursor: pointer; font-size: 13px; }
+  .tokens { display: grid; grid-template-columns: repeat(auto-fit,minmax(290px,1fr)); gap: 8px 24px; margin-top: 16px; }
+  .tk { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .tk span:first-of-type { min-width: 104px; }
+  .issues { padding-left: 20px; }
+  @media(max-width:680px) { main { padding: 24px 16px; } .demo { padding: 24px 20px; } .demo-grid { grid-template-columns: 1fr; gap: 28px; } nav { gap: 12px; font-size: 13px; } h3 { font-size: 30px; } .tokens { grid-template-columns: 1fr; } }
+</style></head><body><main>
+<h1>中国色 · 组件配色预览</h1><p class="lead">在实际文字、卡片和按钮上看配色。悬停、按下按钮，或用 Tab 检查焦点。</p>
+
+          <article class="scheme-0">
+            <header class="scheme-heading"><h2>01 · 梅子青瓷</h2><span>浅色方案</span></header>
+            
+          <div class="demo">
+            <nav aria-label="示例导航"><strong>山间茶事</strong><span class="nav-current">茶单</span><span>产地</span><span>关于</span></nav>
+            <div class="demo-grid">
+              <section class="intro"><p class="eyebrow">本季 · 山间新茶</p>
+                <h3>一盏清茶，<br>留一点从容。</h3>
+                <p class="description">慢一点，感受茶叶舒展的时间。<br>从一份清晰的茶单，找到今天的味道。</p>
+                <div class="actions"><button type="button" class="primary">查看茶单</button><button type="button" class="quiet">了解产地</button></div>
+              </section>
+              <section class="content-card"><h4>春日茶单</h4><p class="muted">本季新采 · 两款风味</p>
+                <div class="tea-row"><span>明前龙井</span><span class="muted">清鲜 · 豆香</span></div>
+                <div class="tea-row"><span>正山小种</span><span class="muted">温润 · 花香</span></div>
+                <label for="search-0">寻找一款茶</label><input id="search-0" placeholder="输入茶名" type="text">
+              </section>
+            </div>
+            <div class="states" aria-label="按钮状态对照"><span class="muted">按钮状态</span>
+              <button type="button" class="primary">默认</button><button type="button" class="primary hover-state">悬停</button><button type="button" class="primary active-state">按下</button>
+            </div>
+          </div>
+            <div class="bar" aria-label="建议铺色面积"><div style="flex:92.0;background:#fbf2e3" title="页面背景 粉白 #fbf2e3 · 92%"></div><div style="flex:6.0;background:#6e8b74" title="导航与图形 瓦松绿 #6e8b74 · 6%"></div><div style="flex:2.0;background:#40a070" title="主按钮 葱绿 #40a070 · 2%"></div></div><div class="legend"><span><i style="background:#fbf2e3"></i>粉白 <code>#fbf2e3</code> · 92%</span><span><i style="background:#6e8b74"></i>瓦松绿 <code>#6e8b74</code> · 6%</span><span><i style="background:#40a070"></i>葱绿 <code>#40a070</code> · 2%</span></div>
+            <div class="checks"><span>卡片正文 <b>9.34:1</b></span><span>卡片说明 <b>4.65:1</b></span><span>悬停文字 <b>6.16:1</b></span><span>按下文字 <b>6.76:1</b></span><span>输入轮廓 <b>3.01:1</b></span></div>
+            <details><summary>查看完整颜色与用途</summary><div class="tokens"><div class="tk"><i style="background:#fbf2e3"></i><span>bg</span><span>粉白</span><code>#fbf2e3</code></div><div class="tk"><i style="background:#e4dfd7"></i><span>surface</span><span>珍珠灰</span><code>#e4dfd7</code></div><div class="tk"><i style="background:#363433"></i><span>text</span><span>长石灰</span><code>#363433</code></div><div class="tk"><i style="background:#5e616d"></i><span>muted</span><span>鱼尾灰</span><code>#5e616d</code></div><div class="tk"><i style="background:#bbb5ac"></i><span>border</span><span>铅灰</span><code>#bbb5ac</code></div><div class="tk"><i style="background:#867e76"></i><span>border_strong</span><span>瓦灰</span><code>#867e76</code></div><div class="tk"><i style="background:#6e8b74"></i><span>secondary</span><span>瓦松绿</span><code>#6e8b74</code></div><div class="tk"><i style="background:#141e1b"></i><span>secondary_fg</span><span>莽丛绿</span><code>#141e1b</code></div><div class="tk"><i style="background:#40a070"></i><span>accent</span><span>葱绿</span><code>#40a070</code></div><div class="tk"><i style="background:#1f2623"></i><span>accent_fg</span><span>苷蓝绿</span><code>#1f2623</code></div><div class="tk"><i style="background:#45b787"></i><span>accent_hover</span><span>蛙绿</span><code>#45b787</code></div><div class="tk"><i style="background:#5dbe8a"></i><span>accent_active</span><span>蔻梢绿</span><code>#5dbe8a</code></div><div class="tk"><i style="background:#2c9678"></i><span>success</span><span>青矾绿</span><code>#2c9678</code></div><div class="tk"><i style="background:#141e1b"></i><span>success_fg</span><span>莽丛绿</span><code>#141e1b</code></div><div class="tk"><i style="background:#815f25"></i><span>warning</span><span>莱阳梨黄</span><code>#815f25</code></div><div class="tk"><i style="background:#f1f0ed"></i><span>warning_fg</span><span>银白</span><code>#f1f0ed</code></div><div class="tk"><i style="background:#62102e"></i><span>error</span><span>葡萄酒红</span><code>#62102e</code></div><div class="tk"><i style="background:#f1f0ed"></i><span>error_fg</span><span>银白</span><code>#f1f0ed</code></div><div class="tk"><i style="background:#1177b0"></i><span>info</span><span>牵牛花蓝</span><code>#1177b0</code></div><div class="tk"><i style="background:#fffefa"></i><span>info_fg</span><span>海参灰</span><code>#fffefa</code></div><div class="tk"><i style="background:#bbb5ac"></i><span>disabled</span><span>铅灰</span><code>#bbb5ac</code></div><div class="tk"><i style="background:#20894d"></i><span>ring</span><span>宫殿绿</span><code>#20894d</code></div></div></details>
+          </article>
+          <article class="scheme-1">
+            <header class="scheme-heading"><h2>02 · 青花甜白</h2><span>浅色方案</span></header>
+            
+          <div class="demo">
+            <nav aria-label="示例导航"><strong>山间茶事</strong><span class="nav-current">茶单</span><span>产地</span><span>关于</span></nav>
+            <div class="demo-grid">
+              <section class="intro"><p class="eyebrow">本季 · 山间新茶</p>
+                <h3>一盏清茶，<br>留一点从容。</h3>
+                <p class="description">慢一点，感受茶叶舒展的时间。<br>从一份清晰的茶单，找到今天的味道。</p>
+                <div class="actions"><button type="button" class="primary">查看茶单</button><button type="button" class="quiet">了解产地</button></div>
+              </section>
+              <section class="content-card"><h4>春日茶单</h4><p class="muted">本季新采 · 两款风味</p>
+                <div class="tea-row"><span>明前龙井</span><span class="muted">清鲜 · 豆香</span></div>
+                <div class="tea-row"><span>正山小种</span><span class="muted">温润 · 花香</span></div>
+                <label for="search-1">寻找一款茶</label><input id="search-1" placeholder="输入茶名" type="text">
+              </section>
+            </div>
+            <div class="states" aria-label="按钮状态对照"><span class="muted">按钮状态</span>
+              <button type="button" class="primary">默认</button><button type="button" class="primary hover-state">悬停</button><button type="button" class="primary active-state">按下</button>
+            </div>
+          </div>
+            <div class="bar" aria-label="建议铺色面积"><div style="flex:80.1;background:#fffef9" title="页面背景 雪白 #fffef9 · 80%"></div><div style="flex:16.0;background:#1772b4" title="导航与图形 群青 #1772b4 · 16%"></div><div style="flex:3.9;background:#144a74" title="主按钮 鷃蓝 #144a74 · 4%"></div></div><div class="legend"><span><i style="background:#fffef9"></i>雪白 <code>#fffef9</code> · 80%</span><span><i style="background:#1772b4"></i>群青 <code>#1772b4</code> · 16%</span><span><i style="background:#144a74"></i>鷃蓝 <code>#144a74</code> · 4%</span></div>
+            <div class="checks"><span>卡片正文 <b>9.34:1</b></span><span>卡片说明 <b>4.65:1</b></span><span>悬停文字 <b>8.15:1</b></span><span>按下文字 <b>8.15:1</b></span><span>输入轮廓 <b>3.01:1</b></span></div>
+            <details><summary>查看完整颜色与用途</summary><div class="tokens"><div class="tk"><i style="background:#fffef9"></i><span>bg</span><span>雪白</span><code>#fffef9</code></div><div class="tk"><i style="background:#e4dfd7"></i><span>surface</span><span>珍珠灰</span><code>#e4dfd7</code></div><div class="tk"><i style="background:#363433"></i><span>text</span><span>长石灰</span><code>#363433</code></div><div class="tk"><i style="background:#5e616d"></i><span>muted</span><span>鱼尾灰</span><code>#5e616d</code></div><div class="tk"><i style="background:#bbb5ac"></i><span>border</span><span>铅灰</span><code>#bbb5ac</code></div><div class="tk"><i style="background:#867e76"></i><span>border_strong</span><span>瓦灰</span><code>#867e76</code></div><div class="tk"><i style="background:#1772b4"></i><span>secondary</span><span>群青</span><code>#1772b4</code></div><div class="tk"><i style="background:#fffefa"></i><span>secondary_fg</span><span>海参灰</span><code>#fffefa</code></div><div class="tk"><i style="background:#144a74"></i><span>accent</span><span>鷃蓝</span><code>#144a74</code></div><div class="tk"><i style="background:#f1f0ed"></i><span>accent_fg</span><span>银白</span><code>#f1f0ed</code></div><div class="tk"><i style="background:#144a74"></i><span>accent_hover</span><span>鷃蓝</span><code>#144a74</code></div><div class="tk"><i style="background:#144a74"></i><span>accent_active</span><span>鷃蓝</span><code>#144a74</code></div><div class="tk"><i style="background:#2c9678"></i><span>success</span><span>青矾绿</span><code>#2c9678</code></div><div class="tk"><i style="background:#141e1b"></i><span>success_fg</span><span>莽丛绿</span><code>#141e1b</code></div><div class="tk"><i style="background:#815f25"></i><span>warning</span><span>莱阳梨黄</span><code>#815f25</code></div><div class="tk"><i style="background:#f1f0ed"></i><span>warning_fg</span><span>银白</span><code>#f1f0ed</code></div><div class="tk"><i style="background:#62102e"></i><span>error</span><span>葡萄酒红</span><code>#62102e</code></div><div class="tk"><i style="background:#f1f0ed"></i><span>error_fg</span><span>银白</span><code>#f1f0ed</code></div><div class="tk"><i style="background:#1177b0"></i><span>info</span><span>牵牛花蓝</span><code>#1177b0</code></div><div class="tk"><i style="background:#fffefa"></i><span>info_fg</span><span>海参灰</span><code>#fffefa</code></div><div class="tk"><i style="background:#cfccc9"></i><span>disabled</span><span>玛瑙灰</span><code>#cfccc9</code></div><div class="tk"><i style="background:#144a74"></i><span>ring</span><span>鷃蓝</span><code>#144a74</code></div></div></details>
+          </article>
+          <article class="scheme-2">
+            <header class="scheme-heading"><h2>03 · 水墨</h2><span>深色方案</span></header>
+            
+          <div class="demo">
+            <nav aria-label="示例导航"><strong>山间茶事</strong><span class="nav-current">茶单</span><span>产地</span><span>关于</span></nav>
+            <div class="demo-grid">
+              <section class="intro"><p class="eyebrow">本季 · 山间新茶</p>
+                <h3>一盏清茶，<br>留一点从容。</h3>
+                <p class="description">慢一点，感受茶叶舒展的时间。<br>从一份清晰的茶单，找到今天的味道。</p>
+                <div class="actions"><button type="button" class="primary">查看茶单</button><button type="button" class="quiet">了解产地</button></div>
+              </section>
+              <section class="content-card"><h4>春日茶单</h4><p class="muted">本季新采 · 两款风味</p>
+                <div class="tea-row"><span>明前龙井</span><span class="muted">清鲜 · 豆香</span></div>
+                <div class="tea-row"><span>正山小种</span><span class="muted">温润 · 花香</span></div>
+                <label for="search-2">寻找一款茶</label><input id="search-2" placeholder="输入茶名" type="text">
+              </section>
+            </div>
+            <div class="states" aria-label="按钮状态对照"><span class="muted">按钮状态</span>
+              <button type="button" class="primary">默认</button><button type="button" class="primary hover-state">悬停</button><button type="button" class="primary active-state">按下</button>
+            </div>
+          </div>
+            <div class="bar" aria-label="建议铺色面积"><div style="flex:92.0;background:#36282b" title="页面背景 苍蝇灰 #36282b · 92%"></div><div style="flex:6.0;background:#856d72" title="导航与图形 芦灰 #856d72 · 6%"></div><div style="flex:2.0;background:#de2a18" title="主按钮 夕阳红 #de2a18 · 2%"></div></div><div class="legend"><span><i style="background:#36282b"></i>苍蝇灰 <code>#36282b</code> · 92%</span><span><i style="background:#856d72"></i>芦灰 <code>#856d72</code> · 6%</span><span><i style="background:#de2a18"></i>夕阳红 <code>#de2a18</code> · 2%</span></div>
+            <div class="checks"><span>卡片正文 <b>10.27:1</b></span><span>卡片说明 <b>5.47:1</b></span><span>悬停文字 <b>5.10:1</b></span><span>按下文字 <b>7.02:1</b></span><span>输入轮廓 <b>3.08:1</b></span></div>
+            <details><summary>查看完整颜色与用途</summary><div class="tokens"><div class="tk"><i style="background:#36282b"></i><span>bg</span><span>苍蝇灰</span><code>#36282b</code></div><div class="tk"><i style="background:#483332"></i><span>surface</span><span>海报灰</span><code>#483332</code></div><div class="tk"><i style="background:#f1f0ed"></i><span>text</span><span>银白</span><code>#f1f0ed</code></div><div class="tk"><i style="background:#bdaead"></i><span>muted</span><span>芦穗灰</span><code>#bdaead</code></div><div class="tk"><i style="background:#4f383e"></i><span>border</span><span>暮云灰</span><code>#4f383e</code></div><div class="tk"><i style="background:#918072"></i><span>border_strong</span><span>银灰</span><code>#918072</code></div><div class="tk"><i style="background:#856d72"></i><span>secondary</span><span>芦灰</span><code>#856d72</code></div><div class="tk"><i style="background:#fffefa"></i><span>secondary_fg</span><span>海参灰</span><code>#fffefa</code></div><div class="tk"><i style="background:#de2a18"></i><span>accent</span><span>夕阳红</span><code>#de2a18</code></div><div class="tk"><i style="background:#fffefa"></i><span>accent_fg</span><span>海参灰</span><code>#fffefa</code></div><div class="tk"><i style="background:#d42517"></i><span>accent_hover</span><span>鹤顶红</span><code>#d42517</code></div><div class="tk"><i style="background:#ac1f18"></i><span>accent_active</span><span>覆盆子红</span><code>#ac1f18</code></div><div class="tk"><i style="background:#2c9678"></i><span>success</span><span>青矾绿</span><code>#2c9678</code></div><div class="tk"><i style="background:#141e1b"></i><span>success_fg</span><span>莽丛绿</span><code>#141e1b</code></div><div class="tk"><i style="background:#f7da94"></i><span>warning</span><span>香水玫瑰黄</span><code>#f7da94</code></div><div class="tk"><i style="background:#363433"></i><span>warning_fg</span><span>长石灰</span><code>#363433</code></div><div class="tk"><i style="background:#f1939c"></i><span>error</span><span>春梅红</span><code>#f1939c</code></div><div class="tk"><i style="background:#363433"></i><span>error_fg</span><span>长石灰</span><code>#363433</code></div><div class="tk"><i style="background:#1177b0"></i><span>info</span><span>牵牛花蓝</span><code>#1177b0</code></div><div class="tk"><i style="background:#fffefa"></i><span>info_fg</span><span>海参灰</span><code>#fffefa</code></div><div class="tk"><i style="background:#4f383e"></i><span>disabled</span><span>暮云灰</span><code>#4f383e</code></div><div class="tk"><i style="background:#f13c22"></i><span>ring</span><span>萝卜红</span><code>#f13c22</code></div></div></details>
+          </article>
+</main></body></html>

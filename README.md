@@ -6,18 +6,26 @@
 **说人话就行**，不用先知道「故宫」「青花」「雅」「空灵」这些名字：
 
 ```bash
-$ python scripts/palette.py ask "茶叶小店的网站，安静一点"
+$ python scripts/palette.py ask "茶叶小店的网站，安静一点" --n 1
 
 解读: 网页界面 · 素净耐看
 
 方案 1 · 素净耐看
-  页面背景     粉白     #fbf2e3   约 78%
-  卡片与导航    瓦松绿    #6e8b74   约 19%
-  主按钮      苋菜红    #a61b29   约 3%
+██████████████████████████████████████████████████▓▓▓▒
+█ 底  ▓ 块  ▒ 点
+  页面背景     粉白     #fbf2e3   约 92%
+  导航与图形    瓦松绿    #6e8b74   约 6%
+  主按钮      葱绿     #40a070   约 2%
   正文用    长石灰    #363433   对比 11.2:1 AAA
-  来处      粉墙上的竹影，与一角花窗
-  当心      竹青铺成块的时候要把颜色压住，让它像影子而不像叶子
-  别做      不要把 苋菜红 铺成整条顶栏或大色带，它只有 3% 的量
+  卡片底    珍珠灰    #e4dfd7   普通内容卡片用这个色
+  说明字     鱼尾灰    #5e616d   对比 4.65:1
+  彩块字     莽丛绿    #141e1b   对比 4.55:1
+  按钮字     苷蓝绿    #1f2623   对比 4.77:1
+  来处      浙江龙泉窑的两种青釉：梅子青像青梅，粉青更淡更润
+  当心      三色同族，是最不容易出错的一类；最小面积那一点靠更鲜跳出来，不靠换一种颜色
+  别做      不要把 葱绿 铺成整条顶栏或大色带，它只有 2% 的量
+
+下一步: 说「就第 1 套」定妆，或者说「太素了 / 红少一点 / 改深色」我来调。
 ```
 
 不是「挑三个好看的 hex」，而是把颜色当角色分配：**来自色库、分得出主次、文字能读、文化上说得通**。
@@ -77,7 +85,7 @@ $ python scripts/palette.py ask "茶叶小店的网站，安静一点"
 - **别名解析**：石青、玄色、胭脂、竹青、天青、黛、漆黑、墨色、中国红…告诉你库内对应哪一色
 - **28 个纹样点缀**：梅兰竹菊莲、远山水纹、回纹冰裂锦地、卷草藻井团花——借已有颜色画，不占配比
 - **交接合同**：一条命令产出 `handoff.json` + `palette.css`，供其他设计技能读
-- **2112 项回归测试**：色彩数学、色库完整性、白话映射、术语泄露、对比度闸门
+- **2345 项回归测试**：色彩数学、色库完整性、白话映射、术语泄露、对比度闸门
 
 ---
 
@@ -263,7 +271,7 @@ $ python scripts/palette.py tweak "太素了，再艳一点" --mood 雅 --no-bar
 
 改后 1
   页面背景     酪黄     #f6dead   约 74%
-  卡片与导航    茶褐     #5d3d21   约 21%
+  导航与图形    茶褐     #5d3d21   约 21%
   主按钮      银朱     #f43e06   约 5%
   正文用    长石灰    #363433   对比 9.4:1 AAA
 ```
@@ -404,7 +412,16 @@ python scripts/selftest.py
 ```
 
 `preview` 产出的 HTML 里色条按真实建议铺色面积等比画（不是硬编码的 6/3/1）。
-`selftest.py` 应输出「全部通过」，共 2112 项断言。改分类、评分或白话词表后必须跑通。
+UI 预览同时展示卡片、正文、说明、输入框与按钮三种状态，直接使用导出的颜色配对。
+可打开 [组件配色样例](assets/preview-ui.html) 对照默认素雅、青花与水墨深色的实际效果。
+`selftest.py` 应输出「全部通过」，共 2345 项断言。改分类、评分或白话词表后必须跑通。
+
+预览检查的是实际组件，而不是只看色条：
+
+- 正文和卡片文字分别对页面底与 `surface` 检查；说明文字不能借用大字的 3:1 额度。
+- 按钮默认、悬停、按下三种状态共用一套 `accent_fg`，交互态沿用同一色相方向。
+- 输入轮廓与焦点环同时对页面和卡片检查；焦点环与控件之间留出背景色间隔。
+- `pick --pair-dark` 生成的亮暗交接分别写入 `verify`、`verify_dark` 和 `issues`，下游应读取这些结果，不要自行补灰色或改 hex。
 
 ### 命令总表
 
@@ -436,9 +453,11 @@ python scripts/selftest.py
 
 ## 能用在 UI/UX 吗
 
-可以，UI 是它的一等场景。`--media ui` 会把 WCAG 对比度作为硬闸门——不达标的方案直接淘汰，而不是照样输出让你自己发现。
+可以，UI 是它的一等场景。`--media ui` 优先选择能承载普通文字的三色，再检查实际组件配对。
+默认素雅界面优先一种主色系与中性色；普通内容卡片使用 `surface`，彩色导航或图形另用 `secondary`。
+用户钉住的颜色保留原样，无法满足某种用途时在交接问题中说明。
 
-一条命令拿到 17 个可直接落地的 token：
+一条命令拿到 22 个可直接落地的 token：
 
 ```bash
 python scripts/palette.py generate --media ui --scene 水墨 --n 1 --css
@@ -446,23 +465,50 @@ python scripts/palette.py generate --media ui --scene 水墨 --n 1 --css
 
 ```css
 :root {
-  --color-bg: #f7f4ed;              /* 鱼肚白 */
-  --color-surface: #e4dfd7;         /* 珍珠灰 */
-  --color-text: #363433;            /* 长石灰 */
-  --color-muted: #5d655f;           /* 狼烟灰 */
-  --color-border: #dad4cb;          /* 浅灰 */
-  --color-border-strong: #9a8878;   /* 海鸥灰 */
-  --color-secondary: #495c69;       /* 战舰灰 */
-  --color-accent: #f43e06;          /* 银朱 */
-  --color-accent-fg: #131824;       /* 燕颔蓝 */
-  --color-accent-hover: #fa5d19;    /* 莓酱红 */
-  --color-accent-active: #f9723d;   /* 芙蓉红 */
-  --color-success: #20a162;         /* 翠绿 */
-  --color-warning: #815f25;         /* 莱阳梨黄 */
-  --color-error: #f43e06;           /* 银朱 */
-  --color-info: #0f59a4;            /* 飞燕草蓝 */
-  --color-disabled: #c0c4c3;        /* 月影白 */
-  --color-ring: #f43e06;            /* 银朱 */
+  --color-bg: #f7f4ed;           /* 鱼肚白 yudubai */
+  --color-bg-rgb: 247, 244, 237;
+  --color-surface: #e4dfd7;           /* 珍珠灰 zhenzhuhui */
+  --color-surface-rgb: 228, 223, 215;
+  --color-text: #363433;           /* 长石灰 changshihui */
+  --color-text-rgb: 54, 52, 51;
+  --color-muted: #5e616d;           /* 鱼尾灰 yuweihui */
+  --color-muted-rgb: 94, 97, 109;
+  --color-border: #bbb5ac;           /* 铅灰 qianhui2 */
+  --color-border-rgb: 187, 181, 172;
+  --color-border-strong: #867e76;           /* 瓦灰 wahui */
+  --color-border-strong-rgb: 134, 126, 118;
+  --color-secondary: #495c69;           /* 战舰灰 zhanjianhui */
+  --color-secondary-rgb: 73, 92, 105;
+  --color-secondary-fg: #f1f0ed;           /* 银白 yinbai */
+  --color-secondary-fg-rgb: 241, 240, 237;
+  --color-accent: #f43e06;           /* 银朱 yinzhu */
+  --color-accent-rgb: 244, 62, 6;
+  --color-accent-fg: #131824;           /* 燕颔蓝 yanhanlan */
+  --color-accent-fg-rgb: 19, 24, 36;
+  --color-accent-hover: #fa5d19;           /* 莓酱红 meijianghong */
+  --color-accent-hover-rgb: 250, 93, 25;
+  --color-accent-active: #f9723d;           /* 芙蓉红 furonghong */
+  --color-accent-active-rgb: 249, 114, 61;
+  --color-success: #2c9678;           /* 青矾绿 qingfanlv */
+  --color-success-rgb: 44, 150, 120;
+  --color-success-fg: #141e1b;           /* 莽丛绿 mangconglv */
+  --color-success-fg-rgb: 20, 30, 27;
+  --color-warning: #815f25;           /* 莱阳梨黄 laiyanglihuang */
+  --color-warning-rgb: 129, 95, 37;
+  --color-warning-fg: #f1f0ed;           /* 银白 yinbai */
+  --color-warning-fg-rgb: 241, 240, 237;
+  --color-error: #62102e;           /* 葡萄酒红 putaojiuhong */
+  --color-error-rgb: 98, 16, 46;
+  --color-error-fg: #f1f0ed;           /* 银白 yinbai */
+  --color-error-fg-rgb: 241, 240, 237;
+  --color-info: #1177b0;           /* 牵牛花蓝 qianniuhualan */
+  --color-info-rgb: 17, 119, 176;
+  --color-info-fg: #fffefa;           /* 海参灰 haishenhui */
+  --color-info-fg-rgb: 255, 254, 250;
+  --color-disabled: #cfccc9;           /* 玛瑙灰 manaohui */
+  --color-disabled-rgb: 207, 204, 201;
+  --color-ring: #ed3321;           /* 樱桃红 yingtaohong */
+  --color-ring-rgb: 237, 51, 33;
 }
 ```
 
@@ -470,16 +516,23 @@ python scripts/palette.py generate --media ui --scene 水墨 --n 1 --css
 
 | 闸门 | 要求 | 依据 |
 | --- | --- | --- |
-| 正文 on 底 | ≥ 4.5:1 | WCAG 2.2 AA (1.4.3) |
-| 次级文字 on 底 | ≥ 4.5:1 | 次级说明也是正文尺寸，不能用 3:1 的大字额度 |
-| 按钮字 on 按钮 | ≥ 4.5:1 | 点缀上要放得下字 |
-| 强描边 on 底 | ≥ 3:1 | WCAG 2.2 (1.4.11) 输入框、部件轮廓 |
+| 正文 on 页面及卡片 | ≥ 4.5:1 | WCAG 2.2 AA (1.4.3) |
+| 次级文字 on 页面及卡片 | ≥ 4.5:1 | 次级说明也是正文尺寸，不能用 3:1 的大字额度 |
+| 按钮字 on 默认、悬停及按下状态 | ≥ 4.5:1 | 同一个字色在全部状态上保持可读 |
+| 块上的字 on 块 | ≥ 4.5:1 | 结构色的落位是导航与图形，上面一定会放字 |
+| 强描边、焦点 on 页面及卡片 | ≥ 3:1 | WCAG 2.2 (1.4.11)，焦点与控件间留背景色间隔 |
 | 面层 vs 底 | ΔE ≥ 4 | 卡片必须能从背景里浮出来 |
 | 状态色徽章 | 徽章上能放下 4.5:1 的字 | 黄色在米色上永远达不到 3:1，所以约束在徽章内部 |
 | 色盲 | 点缀与场在三种色盲下 ΔE ≥ 12 | Brettel / Viénot 线性近似 |
 | 场景色族 | 派生 token 不得漏出场景语汇 | 青花的暗色描边曾经全是紫，正是「青间紫」死局 |
 
 **可读性优先于色族纯度**：换色会破坏对比度时保留原色，并在 `issues[]` 里如实上报，不静默交付一个读不清的字。
+
+色卡、CSS、组件预览使用同一套最终颜色；交互态保持同色相。库内没有安全变体时可以沿用颜色，
+不为区分状态强行换色。状态徽章只在实际成功、警告或错误等状态出现时使用。
+`verify` 与 `verify_dark` 分别检查亮暗交接，使用未四舍五入的比值判定。
+
+每个闸门验的都是**交出去的那个色**。字色与徽章色成对交付（`secondary_fg`、`success_fg` 等），不是临时算一个用来过闸门然后丢掉。库内有 16 个色（都落在 L\* 50~52）不存在任何能对它达到 4.5:1 的搭配，落到这些色上时 `verify.fail` 会标出 `library_best` 与 `large_text_only`，明说这块只放大字、不承载正文——而不是把闸门放宽到 3:1 假装通过。
 
 暗色模式是独立推导的：
 
@@ -496,7 +549,7 @@ python scripts/palette.py generate --media ui --dark --scene 补服 --n 1
 
 | 媒材 | 硬约束 | 口令 |
 | --- | --- | --- |
-| `ui` | 正文 ≥4.5:1 | 页面背景 / 卡片导航 / 主按钮 |
+| `ui` | 正文 ≥4.5:1 | 页面背景 / 导航图形 / 主按钮 |
 | `poster` | 不因对比度偷换文化色 | 纸地 / 主体色块 / 印章题名 |
 | `fashion` | 不做 WCAG | 主面料 / 缘饰里衬 / 盘扣绣佩 |
 | `interior` | 墙面强制 C ≤ 28 | 墙面地面 / 家具柜门 / 摆件或一扇门 |
@@ -518,8 +571,8 @@ python scripts/palette.py pick "鱼肚白+战舰灰+银朱" --scene 水墨 --med
 
 | 技能 | 读 | 明确不读 |
 | --- | --- | --- |
-| frontend-design | `meta` `named6` `roles` `cliche` `bans` | `tokens_*` `chart` |
-| artifact-design | `css.light` `css.dark` `tokens_light` `tokens_dark` `bans` | `chart` `named6` |
+| frontend-design | `meta` `named6` `roles` `css` `tokens_*` `verify` `verify_dark` `issues` `bans` | `chart` |
+| artifact-design | `css` `tokens_*` `verify` `verify_dark` `issues` `bans` | `chart` `named6` |
 | dataviz | `chart` `tokens_light.bg/text/border` `bans` | `named6` `roles` |
 
 `named6` 六个槽必须占满（场 / 面 / 墨 / 界 / 骨 / 眼）——**只给三色，下游会自己发明文字色和描边灰**，那两个就是库外 hex 的入口。
@@ -785,7 +838,7 @@ zhongguose-palette/
     ├── taxonomy.py              色系、五行、四季、角色
     ├── build_catalog.py         从 source.json 重建色库
     ├── build_aliases.py         重建别名表
-    └── selftest.py              2112 项回归
+    └── selftest.py              2345 项回归
 ```
 
 ---

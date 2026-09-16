@@ -36,6 +36,9 @@ DARK_GROUND_MAX_C = 20.0
 # 语义色（success/warning/error/info）本就跨色族——绿/黄/红/青是它们的文化锁，
 # 不属于场景色族。family lock 扫描必须放行这一组，否则每个场景都会误报。
 SEMANTIC_TOKENS = ("success", "warning", "error", "info")
+# 徽章上的字跟着徽章走。徽章色本身跨族，压在它上面的字只能在它的对比窗口里挑，
+# 场景语汇管不到——把 *_fg 也放行，否则每个场景都会为这四个字误报出族。
+SEMANTIC_FG_TOKENS = tuple(f"{k}_fg" for k in SEMANTIC_TOKENS)
 NEUTRAL_FAMILIES = ("灰", "白", "黑")
 
 # 留白型：这些氛围与场景以纸地为主体，结构色的面积下限要放宽，
@@ -146,8 +149,8 @@ SCENES = {
 MEDIA = {
     "ui": dict(
         need_text=True, min_text_ratio=4.5, wall_max_chroma=None,
-        labels=("页面背景", "卡片与导航", "主按钮"),
-        note="界面：正文必须 4.5:1，点缀只给可点元件，不要铺成顶栏",
+        labels=("页面背景", "导航与图形", "主按钮"),
+        note="界面：普通卡片用低彩面层；彩色块单独配字，按钮只占小面积",
     ),
     "poster": dict(
         need_text=False, min_text_ratio=3.0, wall_max_chroma=None,
@@ -810,13 +813,21 @@ def generate(cat: Catalog, mood: str | None = None, scene: str | None = None,
         curated = [p for p in curated
                    if all(getattr(p, r).name == c.name for r, c in pinned.items())]
     ordered = curated + results
+    # 素雅 UI 先看是否连贯，再使用原排序。明确场景、品牌色和非 UI 不受此偏好影响。
+    if media == "ui" and not scene and not pinned and seed_color is None and mood in (None, "雅", "清冷", "空灵"):
+        def quiet_key(p: Palette) -> tuple:
+            sec, acc = p.secondary, p.accent
+            same_hue = ck.hue_delta(sec.H, acc.H) <= 45
+            neutral_support = min(sec.C, acc.C) < 12
+            return (max(sec.C, acc.C) > 50, 0 if same_hue else 1 if neutral_support else 2)
+        ordered.sort(key=quiet_key)
 
     def admissible(p: Palette) -> bool:
         if not media_cfg.get("need_text"):
             return True
         need = media_cfg.get("min_text_ratio") or 4.5
-        text = pick_text(cat, p.dominant, min_ratio=need)
-        return contrast(text, p.dominant) >= need
+        backgrounds = p.trio if media == "ui" and not pinned else (p.dominant,)
+        return all(pick_text_checked(cat, c, min_ratio=need)[1] for c in backgrounds)
 
     for p in ordered:
         p.dark = dark
@@ -957,67 +968,85 @@ def _media_lines(p: Palette, cat: Catalog) -> list[str]:
     lines = [f"媒材「{p.media}」：{a}={p.dominant.name}，{b}={p.secondary.name}，{c}={p.accent.name}",
              cfg["note"]]
     if cfg.get("need_text"):
-        text = pick_text(cat, p.dominant, min_ratio=cfg.get("min_text_ratio") or 4.5)
+        need = cfg.get("min_text_ratio") or 4.5
+        text = pick_text(cat, p.dominant, min_ratio=need)
         lines.append(f"正文 {text.name} {text.hex} 对比 {contrast(text, p.dominant):.2f}:1")
+        # 块上的字要单独说。b 的落位（「卡片与导航」一类）下游一定会放字，
+        # 而库内有 16 个色不存在 4.5 的搭配——那种块只能放大字，必须明说，
+        # 不能让下游以为它和底一样能承载正文。
+        sec_fg, met = pick_text_checked(cat, p.secondary, min_ratio=4.5)
+        ratio = contrast(sec_fg, p.secondary)
+        if met:
+            lines.append(f"{b}上的字 {sec_fg.name} {sec_fg.hex} 对比 {ratio:.2f}:1")
+        else:
+            lines.append(f"{b}上的字 {sec_fg.name} {sec_fg.hex} 对比只有 {ratio:.2f}:1"
+                         f"——库内没有能对 {p.secondary.name} 达到 4.5:1 的色，"
+                         f"这块只放大字（≥3:1 的额度），不承载正文")
     return lines
 
 
 # ---------------------------------------------------------------- 文字色与 token
 
-def pick_text(cat: Catalog, bg: Color, min_ratio: float = 4.5) -> Color:
-    """从色库里挑一个能在给定背景上达到对比度的文字色。
+def pick_text_checked(cat: Catalog, bg: Color, min_ratio: float = 4.5) -> tuple[Color, bool]:
+    """挑文字色，并如实交出「达标了没有」。
 
     浅底优先墨色（深、低彩），深底优先纸感。不只看对比数字——
     纯黑 (#000) 在米色上对比够高但发死，战舰灰/深灰蓝更像墨。
+
+    两条修正，都是「闸门验的色不是交付的色」这一族错：
+    1. L* 50~55 的底两个方向都不成立时（想要浅字，而没有浅字够 4.5），
+       旧代码静默塞一个写死的燕颔蓝。实测 33 个底走这条路，其中 17 个
+       库内明明有 ≥4.5 的色，只是被 L 过滤挡在池外。所以先按原偏好试
+       反方向，再退到全库最大对比——不写死任何一个色名。
+    2. 剩下 16 个底（全部 L* 50.1~52.0，最低 丽春红 4.313）库内真的不存在
+       4.5 的搭配。这些必须让调用方知道，不能靠返回值假装成功：
+       met=False 的落位只能放大字（≥3:1），不承载正文。
     """
-    want_dark = bg.L >= 55
-    pool = [c for c in cat.colors if contrast(c, bg) >= min_ratio]
-    if want_dark:
-        pool = [c for c in pool if c.L < bg.L - 8]
-        pool.sort(key=lambda c: (0 if "墨色" in c.roles else 1, c.C, -contrast(c, bg)))
-    else:
-        pool = [c for c in pool if c.L > bg.L + 8]
-        pool.sort(key=lambda c: (0 if "纸感" in c.roles or "浅底" in c.roles else 1, c.C, -contrast(c, bg)))
-    return pool[0] if pool else (cat.by_name.get("燕颔蓝") or cat.colors[0])
+    def ranked(want_dark: bool) -> list[Color]:
+        pool = [c for c in cat.colors if contrast(c, bg) >= min_ratio]
+        if want_dark:
+            pool = [c for c in pool if c.L < bg.L - 8]
+            pool.sort(key=lambda c: (0 if "墨色" in c.roles else 1, c.C, -contrast(c, bg)))
+        else:
+            pool = [c for c in pool if c.L > bg.L + 8]
+            pool.sort(key=lambda c: (0 if "纸感" in c.roles or "浅底" in c.roles else 1, c.C, -contrast(c, bg)))
+        return pool
+
+    prefer_dark = bg.L >= 55
+    for want_dark in (prefer_dark, not prefer_dark):
+        pool = ranked(want_dark)
+        if pool:
+            return pool[0], True
+    best = max(cat.colors, key=lambda c: contrast(c, bg))
+    return best, contrast(best, bg) >= min_ratio
 
 
-def pick_muted(cat: Catalog, bg: Color, text: Color) -> Color:
+def pick_text(cat: Catalog, bg: Color, min_ratio: float = 4.5) -> Color:
+    """pick_text_checked 的旧签名。只要色、不要达标标记的调用点用这个。"""
+    return pick_text_checked(cat, bg, min_ratio)[0]
+
+
+def pick_muted(cat: Catalog, bg: Color, text: Color, surface: Color | None = None) -> Color:
     """次级文字：比正文轻，但仍然是文字，所以必须 ≥4.5:1。
 
     早先取 3:1–4.5:1，那是 WCAG 给大字和部件的额度。次级说明、时间戳、
     表单帮助文字都是正文尺寸，落在 3.x 就是不合规——弱化要靠明度而非违规。
     """
+    backgrounds = (bg, surface) if surface is not None else (bg,)
     lo, hi = 4.5, 9.0
     pool = [c for c in cat.colors
-            if lo <= contrast(c, bg) < hi and c.name not in (bg.name, text.name)]
+            if all(contrast(c, b) >= lo for b in backgrounds)
+            and contrast(c, bg) < hi and c.C <= 18 and c.name not in (bg.name, text.name)]
     if not pool:
         pool = [c for c in cat.colors
-                if contrast(c, bg) >= lo and c.name not in (bg.name, text.name)]
+                if all(contrast(c, b) >= lo for b in backgrounds)
+                and c.C <= 18 and c.name not in (bg.name, text.name)]
     # 次级文字必须是墨/灰一类安静色。按对比贴近 5.5 会误把龙睛鱼红
     # （高彩橙、碰巧 5.5:1）当成 muted——那是点缀不是字。
     def muted_key(c: Color) -> tuple:
-        quiet = 0 if c.chroma_band in ("无彩", "微彩", "低彩") else 1
-        family = 0 if c.family in ("灰", "黑", "白", "棕") else 1
-        return (quiet, family, abs(contrast(c, bg) - 5.5))
+        return (c.C > 10, abs(min(contrast(c, b) for b in backgrounds) - 5.5), c.C)
     pool.sort(key=muted_key)
     return pool[0] if pool else text
-
-
-def _snap_away(cat: Catalog, bg: Color, target_hex: str, min_de: float = 4.0,
-               min_contrast: float = 0.0, chroma_cap: float | None = None) -> Color:
-    """吸附到色库，但不要吸回自己，并满足最小色差 / 对比。"""
-    snapped = cat.snap(target_hex)
-    if snapped.name != bg.name and delta_e(snapped, bg) >= min_de:
-        if min_contrast <= 0 or contrast(snapped, bg) >= min_contrast:
-            if chroma_cap is None or snapped.C <= chroma_cap:
-                return snapped
-    cands = [c for c in cat.colors
-             if c.name != bg.name
-             and delta_e(c, bg) >= min_de
-             and (min_contrast <= 0 or contrast(c, bg) >= min_contrast)
-             and (chroma_cap is None or c.C <= chroma_cap)]
-    cands.sort(key=lambda c: (delta_e(c, cat.snap(target_hex)), -contrast(c, bg)))
-    return cands[0] if cands else snapped
 
 
 # 语义色的色相窗口：family 不够——橄榄绿名义是绿、色相却是黄。
@@ -1033,10 +1062,15 @@ SEMANTIC_SPEC = {
 }
 
 
-def pick_semantic(cat: Catalog, bg: Color, kind: str) -> Color:
+def pick_semantic(cat: Catalog, bg: Color, kind: str) -> tuple[Color, Color]:
     """状态色：作徽章底，不要求和页面 3:1（黄在米色上几乎永远不够）。
 
     硬条件是徽章上能放下字（on-color ≥4.5:1），以及色相落在该语义的窗口里。
+
+    返回 (徽章色, 徽章上的字)。判据色就是交付色——早先这里算出 on 只拿去做
+    if 判断，然后 `return usable[0]` 把它丢掉，于是「徽章上能放下字」这句话
+    验的是一个从不出现在交付物里的色。下游拿到徽章色后只有 --color-text 可用，
+    而没人验过它压在徽章上是多少。
     """
     spec = SEMANTIC_SPEC[kind]
     fallback = cat.by_name.get(spec["fallback"]) or cat.colors[0]
@@ -1047,106 +1081,146 @@ def pick_semantic(cat: Catalog, bg: Color, kind: str) -> Color:
 
     pool = [c for c in cat.colors
             if c.family in spec["families"] and in_hue(c) and c.C >= spec["chroma_min"]]
-    usable = []
+    usable: list[tuple[Color, Color]] = []
     for c in pool:
-        on = pick_text(cat, c, min_ratio=4.5)
-        if contrast(on, c) >= 4.5:
-            usable.append(c)
+        on, met = pick_text_checked(cat, c, min_ratio=4.5)
+        if met:
+            usable.append((c, on))
     if not usable:
-        return fallback
-    # 浅底上宁可深一点的状态色（能看清形状），深底上宁可亮一点
+        # 回落的徽章底从来没人验过它上面的字。这条路径也必须走 checked，
+        # 不达标由调用方上报（死区色只放大字）。
+        return fallback, pick_text_checked(cat, fallback, min_ratio=4.5)[0]
+    # 状态本身已由色相区分，无需再挑同色相中最刺眼的一枚。
+    target_c = max(38, spec["chroma_min"])
     if bg.L >= 55:
-        usable.sort(key=lambda c: (0 if contrast(c, bg) >= 3.0 else 1, -c.C, c.L))
+        usable.sort(key=lambda t: (0 if contrast(t[0], bg) >= 3.0 else 1, abs(t[0].C - target_c), t[0].L))
     else:
-        usable.sort(key=lambda c: (0 if c.L >= 45 else 1, -c.C))
+        usable.sort(key=lambda t: (0 if t[0].L >= 45 else 1, abs(t[0].C - target_c)))
     return usable[0]
 
 
-def tokens(cat: Catalog, pal: Palette) -> dict:
-    """把三色展开成一套 UI token。全部仍从色库吸附，不发明 hex。
+def _near_color(target: str, candidates: list[Color], fallback: Color) -> Color:
+    """只在合格候选里找近邻；无候选时保留调用方指定的安全回落。"""
+    lab = ck.rgb_to_lab(ck.hex_to_rgb(target))
+    return min(candidates, key=lambda c: ck.delta_e_2000(c.lab, lab)) if candidates else fallback
 
-    分层：
-    - 结构：bg / surface / text / muted / border / border_strong
-    - 品牌：secondary / accent / accent_fg / accent_hover / accent_active
-    - 语义：success / warning / error / info（文化上：绿 / 黄 / 红 / 青）
-    - 状态：disabled / ring
-    """
-    bg = pal.dominant
+
+def _same_hue(c: Color, anchor: Color) -> bool:
+    if anchor.C < 12:
+        return c.C <= 14
+    return anchor.C * 0.5 <= c.C <= anchor.C + 8 and ck.hue_delta(c.H, anchor.H) <= 25
+
+
+def tokens(cat: Catalog, pal: Palette) -> dict:
+    """展开实际可用的 UI 配对。保留三色，派生色同时满足对比与色相约束。"""
+    bg, accent = pal.dominant, pal.accent
     text = pick_text(cat, bg)
-    muted = pick_muted(cat, bg, text)
-    # 面层必须和底分得开：浅底往下走、深底往上走，ΔE 至少 4
-    surface_hex = ck.adjust(bg.hex, dl=(-8 if bg.L >= 70 else 10), dc=-2)
-    surface = _snap_away(cat, bg, surface_hex, min_de=4.0, chroma_cap=28)
-    # 装饰描边可以弱；输入框/按钮轮廓必须 ≥3:1（WCAG 1.4.11）
-    border_hex = ck.adjust(bg.hex, dl=(-14 if bg.L >= 60 else 14), dc=2)
-    border = _snap_away(cat, bg, border_hex, min_de=3.0, chroma_cap=22)
-    border_strong = _snap_away(cat, bg, ck.adjust(bg.hex, dl=(-28 if bg.L >= 60 else 28), dc=6),
-                              min_de=8.0, min_contrast=3.0, chroma_cap=36)
-    accent_fg = pick_text(cat, pal.accent, min_ratio=4.5)
-    # 交互态：悬停略提亮/加压，按下再压一档，全部吸回色库
-    hover_dl = 6 if pal.accent.L < 70 else -8
-    accent_hover = cat.snap(ck.adjust(pal.accent.hex, dl=hover_dl, dc=4))
-    accent_active = cat.snap(ck.adjust(pal.accent.hex, dl=hover_dl * 1.6, dc=6))
-    if accent_hover.name == pal.accent.name:
-        accent_hover = _snap_away(cat, pal.accent, ck.adjust(pal.accent.hex, dl=hover_dl, dc=8), min_de=3)
-    if accent_active.name in (pal.accent.name, accent_hover.name):
-        accent_active = _snap_away(cat, pal.accent, ck.adjust(pal.accent.hex, dl=hover_dl * 1.8, dc=10), min_de=5)
-    disabled = _snap_away(cat, bg, ck.adjust(bg.hex, dl=(-18 if bg.L >= 60 else 18), dc=-8),
-                         min_de=6.0, chroma_cap=16)
-    ring = pal.accent
-    return {
+    neutral = [c for c in cat.colors if c.C <= 12]
+    surface_hex = ck.adjust(bg.hex, dl=(-6 if bg.L >= 70 else 7), dc=-max(0, bg.C - 6))
+    surfaces = [c for c in neutral if delta_e(c, bg) >= 4 and contrast(text, c) >= 4.5
+                and abs(c.L - bg.L) <= 16]
+    surface = _near_color(surface_hex, surfaces, bg)
+    backgrounds = (bg, surface)
+    muted = pick_muted(cat, bg, text, surface)
+    border = _near_color(ck.adjust(surface.hex, dl=(-12 if bg.L >= 60 else 12)),
+                         [c for c in neutral if delta_e(c, surface) >= 3], surface)
+    strong_pool = [c for c in neutral if all(contrast(c, b) >= 3 for b in backgrounds)]
+    border_strong = _near_color(ck.adjust(bg.hex, dl=(-30 if bg.L >= 60 else 30)),
+                                strong_pool, text)
+    accent_fg = pick_text(cat, accent)
+    secondary_fg = pick_text(cat, pal.secondary)
+    state_pool = [c for c in cat.colors if _same_hue(c, accent)
+                  and contrast(accent_fg, c) >= 4.5]
+    # 向远离字色的方向变化，不再把白字按钮提亮到读不清。
+    direction = -1 if accent_fg.L > accent.L else 1
+    hover_pool = [c for c in state_pool if direction * (c.L - accent.L) >= 2]
+    accent_hover = _near_color(ck.adjust(accent.hex, dl=direction * 5), hover_pool, accent)
+    active_pool = [c for c in hover_pool if direction * (c.L - accent_hover.L) >= 2]
+    accent_active = _near_color(ck.adjust(accent.hex, dl=direction * 9), active_pool, accent_hover)
+    disabled = _near_color(ck.adjust(bg.hex, dl=(-18 if bg.L >= 60 else 18)), neutral, surface)
+    ring_pool = [c for c in cat.colors if _same_hue(c, accent)
+                 and all(contrast(c, b) >= 3 for b in backgrounds)]
+    ring = _near_color(accent.hex, ring_pool, border_strong)
+    sem = {k: pick_semantic(cat, bg, k) for k in SEMANTIC_TOKENS}
+    raw = {
         "bg": bg, "surface": surface, "text": text, "muted": muted,
         "border": border, "border_strong": border_strong,
-        "secondary": pal.secondary, "accent": pal.accent,
+        "secondary": pal.secondary, "secondary_fg": secondary_fg, "accent": accent,
         "accent_fg": accent_fg, "accent_hover": accent_hover, "accent_active": accent_active,
-        "success": pick_semantic(cat, bg, "success"),
-        "warning": pick_semantic(cat, bg, "warning"),
-        "error": pick_semantic(cat, bg, "error"),
-        "info": pick_semantic(cat, bg, "info"),
+        "success": sem["success"][0], "success_fg": sem["success"][1],
+        "warning": sem["warning"][0], "warning_fg": sem["warning"][1],
+        "error": sem["error"][0], "error_fg": sem["error"][1],
+        "info": sem["info"][0], "info_fg": sem["info"][1],
         "disabled": disabled, "ring": ring,
     }
+    return apply_family_lock(cat, raw, pal.scene)[0]
 
 
-# 每个 token 欠谁多少对比度。换色时必须守住这些承诺——
-# 可读性优先于色族纯度：宁可留一个出族的色并上报，也不能换出一个读不清的字。
+# 同一张配对表供派生修补与交接验收使用，避免检查与实际交付脱节。
+CONTRAST_GATES = {
+    "text_on_bg": (4.5, "正文"),
+    "text_on_surface": (4.5, "卡片正文"),
+    "muted_on_bg": (4.5, "次级文字"),
+    "muted_on_surface": (4.5, "卡片说明"),
+    "accent_fg_on_accent": (4.5, "按钮上的字"),
+    "accent_fg_on_accent_hover": (4.5, "悬停按钮上的字"),
+    "accent_fg_on_accent_active": (4.5, "按下按钮上的字"),
+    "secondary_fg_on_secondary": (4.5, "彩色块上的字"),
+    "success_fg_on_success": (4.5, "成功徽章上的字"),
+    "warning_fg_on_warning": (4.5, "警示徽章上的字"),
+    "error_fg_on_error": (4.5, "错误徽章上的字"),
+    "info_fg_on_info": (4.5, "信息徽章上的字"),
+    "border_strong_on_bg": (3.0, "页面输入轮廓"),
+    "border_strong_on_surface": (3.0, "卡片输入轮廓"),
+    "ring_on_bg": (3.0, "页面焦点轮廓"),
+    "ring_on_surface": (3.0, "卡片焦点轮廓"),
+}
+
+
+def _preserves_contrast(key: str, candidate: Color, tok: dict) -> bool:
+    for pair, (need, _) in CONTRAST_GATES.items():
+        fg, bg = pair.split("_on_")
+        if key in (fg, bg):
+            partner = tok[bg if key == fg else fg]
+            if contrast(candidate, partner) < need:
+                return False
+    return True
+
+
+# 保留单背景义务的旧映射；完整的多背景约束由 CONTRAST_GATES 统一提供。
 TOKEN_OBLIGATIONS = {
     "text": ("bg", 4.5),
     "muted": ("bg", 4.5),
     "accent_fg": ("accent", 4.5),
+    # 块上的字欠块 4.5。块的落位标签是「卡片与导航」，下游一定会在它上面放字。
+    # 达不到时与 family_lock 既有原则一致：保留原色并上报，不换出读不清的字。
+    "secondary_fg": ("secondary", 4.5),
     "border_strong": ("bg", 3.0),
 }
 
 
 def family_lock(cat: Catalog, tok: dict, scene: str | None) -> list[dict]:
-    """扫 token 是否漏出场景色族。返回问题列表（空表示干净）。
-
-    tokens() 的签名里没有 scene，是 scene-blind 的，所以派生层会漏色。
-    实测 --scene 青花 --dark：surface=暗龙胆紫、border=龙葵紫、
-    border_strong=山梗紫——青配紫，正是荆浩点名的死局。
-
-    语义色不参与：success/warning/error/info 的绿黄红青是文化锁，本就跨族。
-
-    候选必须同时满足该 token 的对比义务。否则会出现这种事：pick_text 正确挑了
-    燕颔蓝（4.68:1），换回场景语汇后变成苷蓝绿（4.07:1），字反而读不清了。
-    """
+    """检查派生色，保留已选三色；修补不得破坏任何实际配对或按钮色相。"""
     if not scene or scene not in SCENES:
         return []
-    allowed = set(SCENES[scene].get("families") or ()) | set(NEUTRAL_FAMILIES)
-    if not allowed:
-        return []
+    base_allowed = set(SCENES[scene].get("families") or ()) | set(NEUTRAL_FAMILIES)
+    accent_keys = ("accent", "accent_fg", "accent_hover", "accent_active", "ring")
     issues: list[dict] = []
     for key, col in tok.items():
-        if key in SEMANTIC_TOKENS or not isinstance(col, Color):
+        if key in SEMANTIC_TOKENS or key in SEMANTIC_FG_TOKENS or not isinstance(col, Color):
             continue
-        if col.family in allowed:
+        allowed = base_allowed | (set(SCENES[scene].get("accent_break") or ())
+                                  if key in accent_keys else set())
+        if col.family in allowed or col.C <= 12:
             continue
-        partner_key, min_ratio = TOKEN_OBLIGATIONS.get(key, (None, 0.0))
-        partner = tok.get(partner_key) if partner_key else None
-        # 在同明度带里找回场景语汇内的替代色，且不得破坏对比义务
         cands = [c for c in cat.colors
                  if c.family in allowed and abs(c.L - col.L) <= 8 and c.C <= max(col.C + 6, 14)]
-        if partner is not None:
-            cands = [c for c in cands if contrast(c, partner) >= min_ratio]
+        cands = [c for c in cands if _preserves_contrast(key, c, tok)]
+        if key in ("accent_hover", "accent_active", "ring"):
+            cands = [c for c in cands if _same_hue(c, tok["accent"])]
+        # 用户看到并选定的三色是锚点，不能在交接阶段重新配一套。
+        if key in ("bg", "secondary", "accent"):
+            cands = []
         cands.sort(key=lambda c: (abs(c.L - col.L), abs(c.C - col.C)))
         issue = {
             "token": key,
@@ -1154,12 +1228,10 @@ def family_lock(cat: Catalog, tok: dict, scene: str | None) -> list[dict]:
             "problem": f"{col.family} 不在场景「{scene}」的色族 {sorted(allowed)} 内",
             "suggest": [{"name": c.name, "hex": c.hex} for c in cands[:3]],
         }
-        if partner is not None and not cands:
-            issue["problem"] += (f"；但场景语汇内没有能对 {partner.name} 保住 "
-                                 f"{min_ratio}:1 的替代色，故保留原色不换")
+        if not cands:
+            issue["problem"] += ("；这是已选颜色，保留并提示场景冲突" if key in ("bg", "secondary", "accent")
+                                 else "；没有同时满足实际配对与色相约束的替代色，保留原色")
             issue["kept"] = True
-            issue["obligation"] = {"against": partner_key, "min_ratio": min_ratio,
-                                   "actual": round(contrast(col, partner), 2)}
         issues.append(issue)
     return issues
 
@@ -1174,10 +1246,13 @@ def apply_family_lock(cat: Catalog, tok: dict, scene: str | None) -> tuple[dict,
     fixed = dict(tok)
     unresolved: list[dict] = []
     for issue in issues:
-        if issue["suggest"]:
-            fixed[issue["token"]] = cat.by_name[issue["suggest"][0]["name"]]
-            issue["fixed_to"] = issue["suggest"][0]
+        key = issue["token"]
+        replacement = next((cat.by_name[c["name"]] for c in issue["suggest"]
+                            if _preserves_contrast(key, cat.by_name[c["name"]], fixed)), None)
+        if replacement is not None:
+            fixed[key] = replacement
         else:
+            issue["kept"] = True
             unresolved.append(issue)
     return fixed, unresolved
 
@@ -1226,10 +1301,13 @@ def css_vars(tok: dict, selector: str = ":root") -> str:
     mapping = [
         ("bg", "bg"), ("surface", "surface"), ("text", "text"), ("muted", "muted"),
         ("border", "border"), ("border_strong", "border-strong"),
-        ("secondary", "secondary"), ("accent", "accent"),
+        ("secondary", "secondary"), ("secondary_fg", "secondary-fg"), ("accent", "accent"),
         ("accent_fg", "accent-fg"), ("accent_hover", "accent-hover"),
         ("accent_active", "accent-active"),
-        ("success", "success"), ("warning", "warning"), ("error", "error"), ("info", "info"),
+        ("success", "success"), ("success_fg", "success-fg"),
+        ("warning", "warning"), ("warning_fg", "warning-fg"),
+        ("error", "error"), ("error_fg", "error-fg"),
+        ("info", "info"), ("info_fg", "info-fg"),
         ("disabled", "disabled"), ("ring", "ring"),
     ]
     for key, css in mapping:
@@ -1243,8 +1321,10 @@ def css_vars(tok: dict, selector: str = ":root") -> str:
 
 def tailwind_extend(tok: dict) -> str:
     keys = ("bg", "surface", "text", "muted", "border", "border_strong",
-            "secondary", "accent", "accent_fg", "accent_hover", "accent_active",
-            "success", "warning", "error", "info", "disabled", "ring")
+            "secondary", "secondary_fg", "accent", "accent_fg",
+            "accent_hover", "accent_active",
+            "success", "success_fg", "warning", "warning_fg",
+            "error", "error_fg", "info", "info_fg", "disabled", "ring")
     body = ",\n".join(f'        "{k}": "{tok[k].hex}"' for k in keys)
     return "extend: {\n      colors: {\n        zhongguose: {\n" + body + "\n        }\n      }\n    }"
 

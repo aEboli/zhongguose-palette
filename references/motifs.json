@@ -30,7 +30,7 @@
   }
  },
  "ink_sources": {
-  "note": "合法借色源只有这 8 个。其余 9 个 token 一律禁止借：accent_fg / accent_hover / accent_active 是交互态，success / warning / error / info 是语义徽章色，disabled 是失能态，ring 是焦点环——纹样借它们等于把状态语义泄进装饰层。",
+  "note": "合法借色源只有这 8 个。其余 14 个 token 一律禁止借：accent_fg / accent_hover / accent_active 是交互态，secondary_fg / success_fg / warning_fg / error_fg / info_fg 是块上与徽章上的字（前景色，欠着 4.5:1 的对比义务，借给装饰层等于让纹样跟着字色走），success / warning / error / info 是语义徽章色，disabled 是失能态，ring 是焦点环——纹样借它们等于把状态语义泄进装饰层。",
   "allowed": [
    "bg",
    "surface",

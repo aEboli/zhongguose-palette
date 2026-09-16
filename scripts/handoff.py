@@ -22,13 +22,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import colorkit as ck  # noqa: E402
 from engine import (  # noqa: E402
-    MEDIA, SCENES, Catalog, Color, Palette, apply_family_lock, cliche_check,
-    contrast, css_vars, generate, pick_text, tokens, visual_areas,
+    CONTRAST_GATES, MEDIA, SCENES, Catalog, Color, Palette, apply_family_lock, cliche_check,
+    contrast, css_vars, family_lock, generate, pick_text, tokens, visual_areas,
 )
 
 TOKEN_KEYS = ("bg", "surface", "text", "muted", "border", "border_strong",
-              "secondary", "accent", "accent_fg", "accent_hover", "accent_active",
-              "success", "warning", "error", "info", "disabled", "ring")
+              "secondary", "secondary_fg", "accent", "accent_fg",
+              "accent_hover", "accent_active",
+              "success", "success_fg", "warning", "warning_fg",
+              "error", "error_fg", "info", "info_fg", "disabled", "ring")
 
 
 def _pack(c: Color) -> dict:
@@ -144,35 +146,44 @@ def categorical(cat: Catalog, bg: Color, max_n: int = 5) -> dict:
 
 # 每项对比度的最低要求。达不到不能只报个数字就交出去——下游不会去核对，
 # 它会照用，然后按钮上的字就是读不清的。
-CONTRAST_GATES = {
-    "text_on_bg": (4.5, "正文"),
-    "muted_on_bg": (4.5, "次级文字"),
-    "accent_fg_on_accent": (4.5, "按钮上的字"),
-    "border_strong_on_bg": (3.0, "输入框/部件轮廓"),
-}
+# 大字额度。库内有 16 个色（全在 L* 50.1~52.0）不存在能对它达到 4.5:1 的搭配，
+# 最低 丽春红 4.313。这些落位只能放大字，不能承载正文——要说出来，
+# 不是把 4.5 硬断言成通过，也不是当作达标静默交付。
+LARGE_TEXT_RATIO = 3.0
 
 
-def _verify(tok: dict) -> dict:
-    pairs = {
-        "text_on_bg": (tok["text"], tok["bg"]),
-        "muted_on_bg": (tok["muted"], tok["bg"]),
-        "accent_fg_on_accent": (tok["accent_fg"], tok["accent"]),
-        "border_strong_on_bg": (tok["border_strong"], tok["bg"]),
-    }
+def _verify(tok: dict, cat: Catalog | None = None) -> dict:
     out: dict = {"fail": []}
-    for key, (a, b) in pairs.items():
-        ratio = round(contrast(a, b), 2)
-        need, label = CONTRAST_GATES[key]
+    for key, (need, label) in CONTRAST_GATES.items():
+        fg, bg = key.split("_on_")
+        a, b = tok[fg], tok[bg]
+        actual = contrast(a, b)
+        ratio = round(actual, 2)
         out[key] = ratio
-        if ratio < need:
-            out["fail"].append({
+        if actual < need:
+            item = {
                 "check": key,
                 "label": label,
                 "got": ratio,
                 "need": need,
                 "pair": f"{a.name} {a.hex} on {b.name} {b.hex}",
-                "handle": "换点缀色，或把这个色只用在大字/图形上（≥3:1 的额度），不要拿它承载正文",
-            })
+                "handle": (f"重新选择 {fg}，同时检查它的全部实际背景；"
+                           "若固定背景无法配出合格文字，将该背景限于装饰用途"),
+            }
+            # 「库内换不出更好的」和「随手挑错了」是两回事，处置也不同。
+            # 前者不该让下游徒劳地换字色，该让它别在这块放正文。
+            best = None
+            if cat is not None:
+                best = max(contrast(x, b) for x in cat.colors if x.name != b.name)
+            if best is not None and best < need:
+                item["library_best"] = round(best, 2)
+                item["large_text_only"] = actual >= LARGE_TEXT_RATIO
+                item["handle"] = (
+                    f"色库里没有任何色能对 {b.name} 达到 {need}:1（最高 {best:.2f}:1）。"
+                    f"这块只放大字（≥{LARGE_TEXT_RATIO}:1 的额度），不承载正文；"
+                    f"要放正文就换 {b.name} 这个色本身。"
+                )
+            out["fail"].append(item)
     return out
 
 
@@ -433,9 +444,10 @@ def ornament(cat: Catalog, pal: Palette, tok: dict, motif_ids: list | None = Non
 def build(cat: Catalog, pal: Palette, dark_pal: Palette | None = None,
           chosen_from: str = "", motif_ids: list | None = None) -> dict:
     """组装 handoff.json。"""
-    tok_light, issues = apply_family_lock(cat, tokens(cat, pal), pal.scene)
+    tok_light = tokens(cat, pal)
+    issues = family_lock(cat, tok_light, pal.scene)
     areas = visual_areas(pal)["pixel_pct"]
-    text = tok_light["text"]
+    verified = _verify(tok_light, cat)
 
     out: dict = {
         "meta": {
@@ -458,7 +470,7 @@ def build(cat: Catalog, pal: Palette, dark_pal: Palette | None = None,
         "named6": named6(cat, pal, tok_light),
         "tokens_light": {k: _pack(tok_light[k]) for k in TOKEN_KEYS},
         "css": {"light": css_vars(tok_light, ":root")},
-        "verify": _verify(tok_light),
+        "verify": verified,
         "chart": {
             "neutrals": {
                 "axis": _pack(tok_light["text"]),
@@ -486,11 +498,14 @@ def build(cat: Catalog, pal: Palette, dark_pal: Palette | None = None,
             "banned_terms": ["中国红"],
             "no_pure_white_black": "不要 #ffffff / #000000。库内最近是 雪白 #fffef9 / 燕颔蓝 #131824",
             "downstream_must_not_edit_hex": "需要库外新色时回来跑 palette.py snap \"#xxxxxx\"，不要插值",
+            "surface_usage": "普通卡片用 surface；secondary 只给少量导航/图形，彩色块配 secondary_fg",
+            "semantic_usage": "success/warning/error/info 只用于真实状态，不给卡片、图标轮流上色",
+            "interaction_usage": "按钮只用 accent 系列并配 accent_fg；焦点环留出背景色间隔，勿直接贴在彩色按钮边缘",
         },
         "issues": list(issues) + [
             {"token": f["check"], "problem": f"{f['label']}对比只有 {f['got']}:1，需要 {f['need']}:1",
              "detail": f["pair"], "handle": f["handle"]}
-            for f in _verify(tok_light)["fail"]
+            for f in verified["fail"]
         ],
         "scope": {
             "owns": ["色", "面积预算", "对比度闸门"],
@@ -498,15 +513,18 @@ def build(cat: Catalog, pal: Palette, dark_pal: Palette | None = None,
             "note": "版式与排版属于 frontend-design。两个技能在同一轴上打架比各自留白更糟。",
         },
         "read_map": {
-            "frontend-design": ["meta", "named6", "roles", "ornament", "cliche", "bans"],
-            "artifact-design": ["css", "tokens_light", "tokens_dark", "bans"],
+            "frontend-design": ["meta", "named6", "roles", "css", "tokens_light", "tokens_dark",
+                                "verify", "verify_dark", "issues", "ornament", "bans"],
+            "artifact-design": ["css", "tokens_light", "tokens_dark", "verify", "verify_dark", "issues", "bans"],
             "dataviz": ["chart", "tokens_light.bg", "tokens_light.text", "tokens_light.border", "bans"],
         },
     }
 
     if dark_pal is not None:
-        tok_dark, dark_issues = apply_family_lock(cat, tokens(cat, dark_pal), dark_pal.scene)
+        tok_dark = tokens(cat, dark_pal)
+        dark_issues = family_lock(cat, tok_dark, dark_pal.scene)
         out["tokens_dark"] = {k: _pack(tok_dark[k]) for k in TOKEN_KEYS}
+        out["verify_dark"] = _verify(tok_dark, cat)
         # 两块都出 :root 会互相覆盖。暗色必须走 data-theme + prefers-color-scheme。
         out["css"]["dark"] = css_vars(tok_dark, '[data-theme="dark"]')
         out["css"]["dark_media"] = (
@@ -514,7 +532,13 @@ def build(cat: Catalog, pal: Palette, dark_pal: Palette | None = None,
             + css_vars(tok_dark, ':root:not([data-theme="light"])').replace("\n", "\n  ")
             + "\n}"
         )
-        out["issues"] = list(out["issues"]) + dark_issues
+        out["issues"] += [dict(i, theme="dark") for i in dark_issues]
+        out["issues"] += [
+            {"theme": "dark", "token": f["check"],
+             "problem": f"深色{f['label']}对比只有 {f['got']}:1，需要 {f['need']}:1",
+             "detail": f["pair"], "handle": f["handle"]}
+            for f in out["verify_dark"]["fail"]
+        ]
         out["meta"]["dark_pair"] = {
             "accent_family_match": dark_pal.accent.family == pal.accent.family,
             "note": "亮暗必须共享点缀色族与场景语汇，否则是两套无关的方案",
